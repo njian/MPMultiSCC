@@ -49,8 +49,8 @@ shifts = csvread('Shifts.csv');
 
 %% Algorithm
 % Parameters
-seed = 3;
-runlength = 1;
+seed = 5;
+runlength = 30;
 
 %Transform routing R into Route. Each row of Route lists the possible agent
 %groups that can take the corresponding call type, in decreasing order of
@@ -71,7 +71,7 @@ clear Rcopy; clear C;
 
 % Generate two random streams, one for initial solution, one for local
 % search.
-[SearchStream] = RandStream.create('mrg32k3a', 'NumStreams', 2);
+[SearchStream] = RandStream.create('mrg32k3a', 'NumStreams', 1);
 SearchStream.Substream = seed;
 RandStream.setGlobalStream(SearchStream);
 
@@ -97,3 +97,7 @@ else
 end
 save([pwd, '\outputs\', fileName]);
 diary; % diary off
+
+%% Test Optimality
+% fprintf('Testing local optimality using finite differences');
+% save([pwd, '\outputs\', fileName, 'CheckOptimality']);

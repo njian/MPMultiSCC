@@ -5,7 +5,7 @@ nShifts = size(shifts, 1);
 % Search Parameters
 nChangeMax = 2^floor(log2(nAgentGroups*nShifts/10)); % maximum number of swaps in x when generating trial solution
 r = 5; % local random search among this many largest gradient components
-max_fail = 10; % maximum number of consecutive fails in local search for x
+max_fail = 5; % maximum number of consecutive fails in local search for x
 
 count_x = 0;
 nChange = nChangeMax; 
@@ -105,7 +105,7 @@ while count_failed_x < max_fail && STOP == 0
         
     end
     
-    if ~(STOP ~= 0 && count_x == 1)
+    if STOP == 0
         [f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, ceil(runlength), seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
         fprintf('Trial solution obj = %.2f, SL = %.2f. \n', f_beta_x, SL_beta_x);        
         n_sim = n_sim + runlength;
@@ -145,6 +145,14 @@ while count_failed_x < max_fail && STOP == 0
         elseif STOP == 1
             fprintf('n is too big. \n');
         end
+        % update last best solution for this beta
+        x_ast = x_trial;
+        f_beta = f_beta_x;
+        sd_beta = sd_x;
+        SL_beta = SL_beta_x;
+%             forwardGradient = forwardGradient_x;
+%             backwardGradient = backwardGradient_x;
+%             backwardGradient(x_ast==0) = -Inf; % remove impossible reductions in x
     end
 end % end local search for x
 

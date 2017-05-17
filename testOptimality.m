@@ -1,3 +1,8 @@
+clear;
+path = 'C:\Users\nj227\Dropbox\Research\CallCenter\MPMultiSCC\outputs\special\search_n\oldLocalSearch\largeCallCenter\';
+filename = 'seed5run30';
+load([path, filename, '.mat']);
+
 [nGroup, nShift] = size(x_opt);
 obj_m = zeros(nGroup, nShift);
 SL_m = zeros(nGroup, nShift);
@@ -5,6 +10,7 @@ obj_p = zeros(nGroup, nShift);
 SL_p = zeros(nGroup, nShift);
 potential_add = 0;
 potential_remove = 0;
+runlength = 1;
 
 tic;
 for group = 1:nGroup
@@ -36,3 +42,5 @@ grad_p = obj_p - f_opt;
 potential_add
 potential_remove
 t = toc
+
+save([path, filename, 'CheckOptimality']);
