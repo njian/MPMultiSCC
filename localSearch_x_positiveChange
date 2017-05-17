@@ -1,0 +1,68 @@
+while count_failed_x < max_fail && STOP ~= 3
+    count_x = count_x + 1;
+    fprintf('--------------------------------------------------------------------- \n');
+    fprintf('Local search iteration (%d) of x. \n', count_x);
+    fprintf('n = %d, beta = %.2f, nChange = %d. \n', sum(sum(x_trial)), beta, nChange);
+
+    % Generate trial solution x: ramndomly choose among the largest
+    % components in forward and backward gradients.
+    % Each group*shift will only be changed at most once.
+    % WIP: if more, need to deal with below 0 in mMax case.      
+    % backwardGradient = - forwardGradient;
+    [~, IndForward] = sort(forwardGradient(:),'descend');
+    [~, IndBackward] = sort(backwardGradient(:),'descend');
+    % the positive components in forwardGradient and non-negative
+    % components in backwardGradient indicate room for improvement
+    npForward = sum(forwardGradient(:)>=0);
+    npBackward = sum(backwardGradient(:)>=0);
+    if npForward <=0 && npBackward <= 0
+        STOP = 3; % local maximum
+    elseif npForward <= 0 
+        STOP = 1; % all coordinates want to decrease
+    elseif npBackward <= 0
+        STOP = 2; % all coordinates want to increase
+    end
+    fprintf('Number of positive forward and backward gradients: %d and %d \n', npForward, npBackward);
+
+    % From Cezik 2008: adaptive step size to avoid non-concave regions
+    if SL_beta < 0.5
+        d = 3;
+    elseif SL_beta < 0.65
+        d = 2;
+    else
+        d = 1;
+    end       
+while countChange < nChange && (npForward > 0 || npBackward > 0) && STOP == 0 
+        % search radius = min(r, number of positive components)
+%         rF = min(r, npForward);
+%         rB = min(r, npBackward);
+        rF = r;
+        rB = r;
+        
+        if rF > 0 && rB > 0
+            % Add agents
+            randIndex = randi(rF);
+            temp = IndForward(randIndex);
+            [pRow, pCol] = ind2sub(size(forwardGradient), temp);
+            x_trial(pRow, pCol) = x_trial(pRow, pCol) + 1;
+            changeTolerancePlus(pRow, pCol) = changeTolerancePlus(pRow, pCol) - 1;
+            if changeTolerancePlus(pRow, pCol) <= 0
+                IndForward(randIndex) = []; % remove the chosen index
+                npForward = npForward - 1;
+            end
+            
+            % Remove agents
+            randIndex = randi(rB);
+            temp = IndBackward(randIndex);
+            [mRow, mCol] = ind2sub(size(backwardGradient), temp);
+            
+            x_trial(mRow, mCol) = x_trial(mRow, mCol) - 1; 
+            changeToleranceMinus(mRow, mCol) = changeToleranceMinus(mRow, mCol) - 1;
+            if (changeToleranceMinus(mRow, mCol) <= 0 || x_trial(mRow, mCol) <= 0)
+                IndBackward(randIndex) = [];
+                npBackward = npBackward - 1;
+            end
+            countChange = countChange + 1;
+        end
+        
+    end

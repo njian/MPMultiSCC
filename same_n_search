@@ -1,0 +1,45 @@
+while count_failed_x < max_fail
+            count_x = count_x + 1;
+            fprintf('------------------------------------------------ \n');
+            fprintf('Local search iteration (%d) of x: nChange = %d. \n', count_x, nChange);
+
+            % Generate trial solution x: ramndomly choose among the largest
+            % components in forward and backward gradients.
+            % Each group*shift will only be changed at most once.
+            % WIP: if more, need to deal with below 0 in mMax case.      
+            % backwardGradient = - forwardGradient;
+            backwardGradient(x_trial==0) = -Inf; % remove impossible reductions in x
+            [~, IndForward] = sort(forwardGradient(:),'descend');
+            [~, IndBackward] = sort(backwardGradient(:),'descend');
+            % the positive components in forwardGradient and non-negative
+            % components in backwardGradient indicate room for improvement
+            npForward = sum(forwardGradient(:)>=0);
+            npBackward = sum(backwardGradient(:)>=0);
+
+            countChange = 0;
+            while countChange < nChange
+                if npForward <= 0 || npBackward <= 0
+                    break % max benefit <= 0
+                end
+
+                % search radius = min(r, number of positive components)
+                rF = min(r, npForward);
+                rB = min(r, npBackward);
+
+                if rF > 0 && rB > 0
+                    randIndex1 = randi(rF);
+                    randIndex2 = randi(rB);
+                    temp1 = IndForward(randIndex1);
+                    temp2 = IndBackward(randIndex2);
+                    [pRow, pCol] = ind2sub(size(forwardGradient), temp1);
+                    [mRow, mCol] = ind2sub(size(backwardGradient), temp2);
+
+                    x_trial(pRow, pCol) = x_trial(pRow, pCol) + 1;
+                    x_trial(mRow, mCol) = x_trial(mRow, mCol) - 1;
+                    countChange = countChange + 2;
+                    IndForward(randIndex) = []; % remove the chosen index
+                    npForward = npForward - 1;
+                    IndBackward(randIndex) = [];
+                    npBackward = npBackward - 1;
+                end
+            end

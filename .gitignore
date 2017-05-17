@@ -47,5 +47,9 @@ Temporary Items
 .apdisk
 
 # Output files
-.mat
-.txt
+*.mat
+*.txt
+*.asv
+
+# Data
+*.csv
