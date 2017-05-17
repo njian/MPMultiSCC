@@ -41,15 +41,16 @@ while n_U - n_L > 1
         % and skip evaluating the smaller point n_lambda. 
         if SL_rho < serviceLevelMin
             skip_rest = 1;
-        end   
+        end  
     else
-        n_rho = n_lambda;
-        x_rho = x_lambda;
-        f_rho = f_lambda;
-        beta_rho = beta_lambda;
-        SL_rho = SL_lambda;
-        sd_rho = sd_lambda;
+        n_lambda = n_rho;
+        x_lambda = x_rho;
+        f_lambda = f_rho;
+        beta_lambda = beta_rho;
+        SL_lambda = SL_rho;
+        sd_lambda = sd_rho;
     end
+    
     
     if skip_rest == 0
         if n_rho == round(golden_ratio * n_L + (1 - golden_ratio) * n_U);
@@ -62,12 +63,12 @@ while n_U - n_L > 1
             [f_lambda, x_lambda, SL_lambda, sd_lambda, beta_lambda, reps] = bisection_beta(n_lambda, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts);
             n_sim = n_sim + reps;
         else
-            n_lambda = n_rho;
-            x_lambda = x_rho;
-            f_lambda = f_rho;
-            beta_lambda = beta_rho;
-            SL_lambda = SL_rho;
-            sd_lambda = sd_rho;
+            n_rho = n_lambda;
+            x_rho = x_lambda;
+            f_rho = f_lambda;
+            beta_rho = beta_lambda;
+            SL_rho = SL_lambda;
+            sd_rho = sd_lambda;
         end
     end
           
