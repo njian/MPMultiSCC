@@ -22,7 +22,7 @@ R = [1 1000; 2 1]; % nGroups x nCallTypes
 % %%%%%%%%%%%%%%For larger call-center, comment out all previous %%%%%%%%%%%%%
 % %%%%%%%%%%%%%%definitions except for reading shifts and uncom- %%%%%%%%%%%%%
 % %%%%%%%%%%%%%%ment the following:                              %%%%%%%%%%%%%
-%
+
 % nCallTypes = 20;
 % nAgentGroups = 35;
 % varsigma = 0.1;
@@ -49,7 +49,7 @@ shifts = csvread('Shifts.csv');
 
 %% Algorithm
 % Parameters
-seed = 1;
+seed = 3;
 runlength = 1;
 
 %Transform routing R into Route. Each row of Route lists the possible agent

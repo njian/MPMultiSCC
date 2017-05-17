@@ -4,7 +4,7 @@ golden_ratio = 2/(1 + sqrt(5));
 
 % EXCLUSIVE BOUNDS: evaluating all n from n_L + 1 to n_U - 1.
 n_L = 0; % initial bounds for #agents
-n_U = 87; %ceil(max(arrivalRates(:)) * nCallTypes * meanST  / 15); % required by 15-min max workload required
+n_U = 86; %ceil(max(arrivalRates(:)) * nCallTypes * meanST  / 15); % required by 15-min max workload required
 if n_U - n_L <= 1
     fprintf('Error: Invalid n_L and n_U bounds. Bounds are exclusive: if want n = 1, one should set n_L = 0, n_U = 3. \n');
 end
