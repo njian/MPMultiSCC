@@ -32,12 +32,6 @@ while n_U - n_L > 1
     end  
     fprintf('Using aggressiveSearch? %d \n', aggressiveSearch);
     
-    % if n_lambda = n_rho (happens at close enough n_L and n_U)
-    if round((1 - golden_ratio) * n_L + golden_ratio * n_U) == round(golden_ratio * n_L + (1 - golden_ratio) * n_U)
-        reuse_rho = 1;
-        fprintf('n_lambda = n_rho = %d. \n', round((1 - golden_ratio) * n_L + golden_ratio * n_U));
-    end
-    
     % First try to reuse n_rho or n_lambda points utilizing golden ratio.
     if reuse_lambda == 1
         n_rho = n_lambda;
@@ -58,7 +52,7 @@ while n_U - n_L > 1
     % Then evaluate the missing n_rho or n_lambda.
     skip_rest = 0;
     if reuse_lambda == 0 % cannot reuse old lambda for new rho
-        n_rho = round((1 - golden_ratio) * n_L + golden_ratio * n_U);
+        n_rho = ceil((1 - golden_ratio) * n_L + golden_ratio * n_U);
         fprintf('*************************************************************************************************************************** \n');
         fprintf('Evaluating: n_rho = %d. \n', n_rho);
         [f_rho, x_rho, SL_rho, sd_rho, beta_rho, reps] = bisection_beta(n_rho, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, aggressiveSearch);
@@ -68,21 +62,21 @@ while n_U - n_L > 1
         if SL_rho < serviceLevelMin
             skip_rest = 1;
         end
+        fprintf('*************************************************************************************************************************** \n');
+        fprintf('Concluding: n_rho = %d, f_rho = %.2f, SL_rho = %.2f. skip_rest = %d. \n', n_rho, f_rho, SL_rho, skip_rest);
     end
-    fprintf('*************************************************************************************************************************** \n');
-    fprintf('Concluding: n_rho = %d, f_rho = %.2f, SL_rho = %.2f. skip_rest = %d. \n', n_rho, f_rho, SL_rho, skip_rest);
     
     if skip_rest == 0
         if reuse_rho == 0 % cannot reuse old rho for new lambda
-            n_lambda = round(golden_ratio * n_L + (1 - golden_ratio) * n_U);
+            n_lambda = floor(golden_ratio * n_L + (1 - golden_ratio) * n_U);
             fprintf('*************************************************************************************************************************** \n');
             fprintf('Evaluating: n_lambda = %d. \n', n_lambda);
             [f_lambda, x_lambda, SL_lambda, sd_lambda, beta_lambda, reps] = bisection_beta(n_lambda, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, aggressiveSearch);
             n_sim = n_sim + reps; 
         end
+        fprintf('*************************************************************************************************************************** \n');
+        fprintf('Concluding: n_lambda = %d, f_lambda = %.2f, SL_lambda = %.2f. \n', n_lambda, f_lambda, SL_lambda);
     end
-    fprintf('*************************************************************************************************************************** \n');
-    fprintf('Concluding: n_lambda = %d, f_lambda = %.2f, SL_lambda = %.2f. \n', n_lambda, f_lambda, SL_lambda);
     
     fprintf('*************************************************************************************************************************** \n');
     fprintf('Finished golden section iteration (%d) of n: n_L = %d, n_U = %d. \n', count_n, n_L, n_U);
@@ -135,7 +129,11 @@ while n_U - n_L > 1
         fprintf('n step: failed. This solution %.2f <= last best %.2f. \n', f_n, f);
     end
     
-    fprintf('Making n step: n_lambda = %d, f_lambda = %.2f, n_rho = %d, f_rho = %.2f. \n', n_lambda, f_lambda, n_rho, f_rho);
+    if skip_rest == 0
+        fprintf('Making n step: n_lambda = %d, f_lambda = %.2f, n_rho = %d, f_rho = %.2f. \n', n_lambda, f_lambda, n_rho, f_rho);
+    else
+        fprintf('n_rho = %d, f_rho = %.2f is not feasible. Increasing n.\n', n_rho, f_rho);
+    end
     fprintf('*************************************************************************************************************************** \n');
     
 end % end goldensection search for n
