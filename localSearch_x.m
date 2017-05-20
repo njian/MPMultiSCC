@@ -3,7 +3,7 @@ function [f_beta, x_ast, SL_beta, sd_beta, n_sim] = localSearch_x(n, beta, runle
 nShifts = size(shifts, 1);
 
 % Search Parameters
-nChangeMax = 2^floor(log2(nAgentGroups*nShifts/10)); % maximum number of swaps in x when generating trial solution
+nChangeMax = min(32, 2^floor(log2(nAgentGroups*nShifts/10))); % maximum number of swaps in x when generating trial solution
 r = 5; % local random search among this many largest gradient components
 max_fail = 5; % maximum number of consecutive fails in local search for x
 
@@ -20,7 +20,12 @@ for k = 1:n
     col = randi(nShifts);
     x_trial(row, col) = x_trial(row, col) + 1;
 end
-[f_beta, SL_beta, sd_beta, forwardGradient, backwardGradient] = MultiSkillPickedCalls(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
+[f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
+f_beta = f_beta_x;
+SL_beta = SL_beta_x;
+sd_beta = sd_x;
+forwardGradient = forwardGradient_x;
+backwardGradient = backwardGradient_x;
 backwardGradient(x_trial==0) = -Inf;
 
 % f_beta = f_beta_x;
@@ -141,18 +146,10 @@ while count_failed_x < max_fail && STOP == 0
         if STOP == 3
             fprintf('Seems like a local optimal. \n');
         elseif STOP == 2
-            fprintf('n is too small. \n');
+            fprintf('n is too small for this level of beta. \n');
         elseif STOP == 1
-            fprintf('n is too big. \n');
+            fprintf('n is too big for this level of beta. \n');
         end
-        % update last best solution for this beta
-        x_ast = x_trial;
-        f_beta = f_beta_x;
-        sd_beta = sd_x;
-        SL_beta = SL_beta_x;
-%             forwardGradient = forwardGradient_x;
-%             backwardGradient = backwardGradient_x;
-%             backwardGradient(x_ast==0) = -Inf; % remove impossible reductions in x
     end
 end % end local search for x
 

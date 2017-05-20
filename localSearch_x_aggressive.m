@@ -3,7 +3,7 @@ function [f_beta, x_ast, SL_beta, sd_beta, n_sim] = localSearch_x_aggressive(n, 
 nShifts = size(shifts, 1);
  
 % Search Parameters
-nChangeMax = 2^floor(log2(nAgentGroups*nShifts/10)); % maximum number of swaps in x when generating trial solution
+nChangeMax = min(32, 2^floor(log2(nAgentGroups*nShifts/10))); % maximum number of swaps in x when generating trial solution
 r = 5; % local random search among this many largest gradient components
 max_fail = 5; % maximum number of consecutive fails in local search for x
  
@@ -20,7 +20,13 @@ for k = 1:n
     col = randi(nShifts);
     x_trial(row, col) = x_trial(row, col) + 1;
 end
-[f_beta, SL_beta, sd_beta, forwardGradient, backwardGradient] = MultiSkillPickedCalls(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
+[f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
+f_beta = f_beta_x;
+SL_beta = SL_beta_x;
+sd_beta = sd_x;
+forwardGradient = forwardGradient_x;
+backwardGradient = backwardGradient_x;
+backwardGradient(x_trial==0) = -Inf;
 backwardGradient(x_trial==0) = -Inf;
  
 % f_beta = f_beta_x;
@@ -63,7 +69,9 @@ while count_failed_x < max_fail && STOP == 0
         d = 1;
     end
     
-    % search radius = min(r, number of positive components)
+    % search radius <= number of positive backward/forward gradient
+    % components so that there exists a forward/backward gradient component
+    % to make the sum > 0.
     rB = min(r, sum(SortedBackward > -SortedForward(1)));
     rF = min(r, sum(SortedForward > -SortedBackward(1)));
     
@@ -72,15 +80,18 @@ while count_failed_x < max_fail && STOP == 0
     countChange = 0;
     q = 0;
     while countChange < nChange && rF > 0 && rB > 0 && STOP == 0 %(npForward > 0 || npBackward > 0)
+        q = q + 1;
         % Generate random group and shift to add an agent
         randIndexF = randi(rF);
         [pRow, pCol] = ind2sub([nAgentGroups, nShifts], IndForward(randIndexF));
-        % Generate random group and shift to remove an agent
-        randIndexB = randi(rB);
-        [mRow, mCol] = ind2sub([nAgentGroups, nShifts], IndBackward(randIndexB));
-        q = q + 1;
-        
-        if forwardGradient(pRow, pCol) + backwardGradient(mRow, mCol) > 0
+        % Generate random group and shift to remove an agent, so that the
+        % total change in obj is > 0
+        max_rB = sum(SortedBackward > - forwardGradient(pRow, pCol));
+        if max_rB > 0
+            randIndexB = randi(max_rB);
+            [mRow, mCol] = ind2sub([nAgentGroups, nShifts], IndBackward(randIndexB));
+            
+            % Execute swap
             x_trial(pRow, pCol) = x_trial(pRow, pCol) + 1;
             changeTolerancePlus(pRow, pCol) = changeTolerancePlus(pRow, pCol) - 1;
             if changeTolerancePlus(pRow, pCol) <= 0
@@ -96,6 +107,8 @@ while count_failed_x < max_fail && STOP == 0
             end
 
             countChange = countChange + 1;
+        else
+            break
         end
         
         if q > 100

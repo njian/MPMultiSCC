@@ -27,7 +27,7 @@ while n_U - n_L > 1
     f_n = 1e4; % best solution so far
     
     aggressiveSearch = 0;
-    if n_U - n_L <= 15 % approximately 4 iterations to go
+    if n_U - n_L <= 10 % approximately 4 iterations to go
         aggressiveSearch = 1;
     end  
     fprintf('Using aggressiveSearch? %d \n', aggressiveSearch);

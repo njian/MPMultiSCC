@@ -1,4 +1,4 @@
-function [f_n, x_ast_ast, SL_n, sd_n, beta_U, n_sim] = bisection_beta(n, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts)
+function [f_n, x_ast_ast, SL_n, sd_n, beta_U, n_sim] = bisection_beta(n, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, aggressiveSearch)
 %UNTITLED2 Summary of this function goes here
 %   Detailed explanation goes here
 epsilon = 0.1; % stopping precision for beta
@@ -35,8 +35,11 @@ while beta_U - beta_L > epsilon
     end
     
     % Local search for x given beta and n
-%     [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
-    [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x_aggressive(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);  
+    if aggressiveSearch == 0
+        [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
+    else % do a more detailed local search when n_U and n_L are close
+        [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x_aggressive(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);  
+    end
 %       [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_varyN_x(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts); 
     n_sim = n_sim + reps;
     
@@ -64,7 +67,8 @@ while beta_U - beta_L > epsilon
     else
         beta_U = beta;
     end
-
+    
+    fprintf('======================================================================================== \n');
 end % end bisection search for beta
 
 end
