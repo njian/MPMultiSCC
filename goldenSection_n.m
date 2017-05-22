@@ -52,7 +52,7 @@ while n_U - n_L > 1
     % Then evaluate the missing n_rho or n_lambda.
     skip_rest = 0;
     if reuse_lambda == 0 % cannot reuse old lambda for new rho
-        n_rho = ceil((1 - golden_ratio) * n_L + golden_ratio * n_U);
+        n_rho = round((1 - golden_ratio) * n_L + golden_ratio * n_U);
         fprintf('*************************************************************************************************************************** \n');
         fprintf('Evaluating: n_rho = %d. \n', n_rho);
         [f_rho, x_rho, SL_rho, sd_rho, beta_rho, reps] = bisection_beta(n_rho, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, aggressiveSearch);
@@ -68,16 +68,24 @@ while n_U - n_L > 1
     
     if skip_rest == 0
         if reuse_rho == 0 % cannot reuse old rho for new lambda
-            n_lambda = floor(golden_ratio * n_L + (1 - golden_ratio) * n_U);
-            fprintf('*************************************************************************************************************************** \n');
-            fprintf('Evaluating: n_lambda = %d. \n', n_lambda);
-            [f_lambda, x_lambda, SL_lambda, sd_lambda, beta_lambda, reps] = bisection_beta(n_lambda, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, aggressiveSearch);
-            n_sim = n_sim + reps; 
+            n_lambda = round(golden_ratio * n_L + (1 - golden_ratio) * n_U);
+            if n_lambda ~= n_rho
+                fprintf('*************************************************************************************************************************** \n');
+                fprintf('Evaluating: n_lambda = %d. \n', n_lambda);
+                [f_lambda, x_lambda, SL_lambda, sd_lambda, beta_lambda, reps] = bisection_beta(n_lambda, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, aggressiveSearch);
+                n_sim = n_sim + reps;
+            else
+                n_lambda = n_rho;
+                x_lambda = x_rho;
+                f_lambda = f_rho;
+                beta_lambda = beta_rho;
+                SL_lambda = SL_rho;
+                sd_lambda = sd_rho;
+            end
         end
         fprintf('*************************************************************************************************************************** \n');
         fprintf('Concluding: n_lambda = %d, f_lambda = %.2f, SL_lambda = %.2f. \n', n_lambda, f_lambda, SL_lambda);
     end
-    
     fprintf('*************************************************************************************************************************** \n');
     fprintf('Finished golden section iteration (%d) of n: n_L = %d, n_U = %d. \n', count_n, n_L, n_U);
     
@@ -99,6 +107,14 @@ while n_U - n_L > 1
         beta_n = beta_lambda;
         x_n = x_lambda;
         reuse_rho = 1; reuse_lambda = 0;
+    elseif n_lambda == n_rho % when n_U - n_L = 4 or 2
+        n_U = n_U - 1;
+        f_n = f_lambda;
+        SL_n = SL_lambda;
+        sd_n = sd_lambda;
+        beta_n = beta_lambda;
+        x_n = x_lambda;
+        reuse_lambda = 1; reuse_rho = 0;
     % If both SL satisfy SLMin, update bounds like golden ratio search
     elseif f_lambda < f_rho
         n_L = n_lambda;
@@ -116,7 +132,7 @@ while n_U - n_L > 1
         beta_n = beta_lambda;
         x_n = x_lambda;
         reuse_lambda = 1; reuse_rho = 0;
-    end
+    end        
     
     % Record the best solution so far
     if f_n > f        
