@@ -1,4 +1,4 @@
-function [ x_opt, beta, fAll, n_sim] = goldenSection_n( runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts)
+function [ x_opt, beta, history_n, history_all, n_sim] = goldenSection_n( runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts)
 % Use golden section to find n with minimal f_n = max_n f_n_beta.
 golden_ratio = 2/(1 + sqrt(5));
 
@@ -9,7 +9,8 @@ if n_U - n_L <= 1
     fprintf('Error: Invalid n_L and n_U bounds. Bounds are exclusive: if want n = 1, one should set n_L = 0, n_U = 3. \n');
 end
 
-fAll = [];
+history_n = [];
+history_all = [];
 f = -1e4; % best solution so far
 count_n = 0;
 n_sim = 0;
@@ -52,11 +53,14 @@ while n_U - n_L > 1
     % Then evaluate the missing n_rho or n_lambda.
     skip_rest = 0;
     if reuse_lambda == 0 % cannot reuse old lambda for new rho
-        n_rho = round((1 - golden_ratio) * n_L + golden_ratio * n_U);
-        fprintf('*************************************************************************************************************************** \n');
-        fprintf('Evaluating: n_rho = %d. \n', n_rho);
-        [f_rho, x_rho, SL_rho, sd_rho, beta_rho, reps] = bisection_beta(n_rho, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, aggressiveSearch);
-        n_sim = n_sim + reps;
+        if n_rho ~= round((1 - golden_ratio) * n_L + golden_ratio * n_U) % if not new n_rho = new n_lambda = old n_rho
+            n_rho = round((1 - golden_ratio) * n_L + golden_ratio * n_U);
+            fprintf('*************************************************************************************************************************** \n');
+            fprintf('Evaluating: n_rho = %d. \n', n_rho);
+            [f_rho, x_rho, SL_rho, sd_rho, beta_rho, reps, fAll_beta] = bisection_beta(n_rho, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, aggressiveSearch);
+            history_all = [history_all, fAll_beta];
+            n_sim = n_sim + reps;
+        end            
         % If SL is too low, increase n directly to the larger point n_rho, 
         % and skip evaluating the smaller point n_lambda. 
         if SL_rho < serviceLevelMin
@@ -72,7 +76,8 @@ while n_U - n_L > 1
             if n_lambda ~= n_rho
                 fprintf('*************************************************************************************************************************** \n');
                 fprintf('Evaluating: n_lambda = %d. \n', n_lambda);
-                [f_lambda, x_lambda, SL_lambda, sd_lambda, beta_lambda, reps] = bisection_beta(n_lambda, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, aggressiveSearch);
+                [f_lambda, x_lambda, SL_lambda, sd_lambda, beta_lambda, reps, fAll_beta] = bisection_beta(n_lambda, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, aggressiveSearch);
+                history_all = [history_all, fAll_beta];
                 n_sim = n_sim + reps;
             else
                 n_lambda = n_rho;
@@ -140,7 +145,8 @@ while n_U - n_L > 1
         f = f_n;
         x_opt = x_n;
         beta = beta_n;
-        fAll = [fAll, [n_sim; f; sd_n; SL_n; beta_n; sum(sum(x_opt))]];
+        cost_n = beta * (SL_n - serviceLevelMin) - f_n;
+        history_n = [history_n, [sum(sum(x_opt)); n_sim; f; sd_n; cost_n; SL_n; beta_n]];
     else
         fprintf('n step: failed. This solution %.2f <= last best %.2f. \n', f_n, f);
     end
