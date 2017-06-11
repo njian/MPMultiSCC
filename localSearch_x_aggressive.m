@@ -1,9 +1,9 @@
-function [f_beta, x_ast, SL_beta, sd_beta, n_sim] = localSearch_x_aggressive(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts)
+function [f_beta, x_ast, SL_beta, sd_beta, n_sim] = localSearch_x_aggressive(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts)
 % Given n and beta, local search for x.
 nShifts = size(shifts, 1);
  
 % Search Parameters
-nChangeMax = min(32, 2^floor(log2(nAgentGroups*nShifts/10))); % maximum number of swaps in x when generating trial solution
+nChangeMax = 32; %min(32, 2^floor(log2(nAgentGroups*nShifts/10))); % maximum number of swaps in x when generating trial solution
 r = 5; % local random search among this many largest gradient components
 max_fail = 5; % maximum number of consecutive fails in local search for x
  
@@ -20,7 +20,7 @@ for k = 1:n
     col = randi(nShifts);
     x_trial(row, col) = x_trial(row, col) + 1;
 end
-[f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
+[f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts);
 f_beta = f_beta_x;
 SL_beta = SL_beta_x;
 sd_beta = sd_x;
@@ -55,7 +55,7 @@ while count_failed_x < max_fail && STOP == 0
     % components in backwardGradient indicate room for improvement
     npForward = sum(SortedForward>=0);
     npBackward = sum(SortedBackward>=0);
-    if npForward <=0 && npBackward <= 0
+    if npForward <=0 && npBackward <= 0 
         STOP = 1; % local maximum
     end
     fprintf('Number of positive forward and backward gradients: %d and %d \n', npForward, npBackward);
@@ -79,7 +79,7 @@ while count_failed_x < max_fail && STOP == 0
     changeToleranceMinus = d * ones(nAgentGroups, nShifts);
     countChange = 0;
     q = 0;
-    while countChange < nChange && rF > 0 && rB > 0 && STOP == 0 %(npForward > 0 || npBackward > 0)
+    while countChange < nChange && rF > 0 && rB > 0 && STOP == 0 %&& (npForward > 0 || npBackward > 0)
         q = q + 1;
         % Generate random group and shift to add an agent
         randIndexF = randi(rF);
@@ -107,21 +107,24 @@ while count_failed_x < max_fail && STOP == 0
             end
 
             countChange = countChange + 1;
-        else
-            break
         end
         
-        if q > 100
-            q
+        if q > 10
+           q 
         end
         
         % search radius
         rB = min(r, sum(SortedBackward > -SortedForward(1)));
-        rF = min(r, sum(SortedForward > -SortedBackward(1)));
+        rF = min(r, sum(SortedForward > -SortedBackward(1)));       
+    end
+    
+    if countChange == 0
+       fprintf('x step: no trial solution can be generated. \n'); 
+       STOP = 4;
     end
      
-    if STOP == 0 %~(STOP ~= 0 && count_x == 1)
-        [f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, ceil(runlength), seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
+    if STOP == 0 && countChange > 0
+        [f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, ceil(runlength), seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts);
         fprintf('Trial solution obj = %.2f, SL = %.2f. \n', f_beta_x, SL_beta_x);        
         n_sim = n_sim + runlength;
  
@@ -149,7 +152,7 @@ while count_failed_x < max_fail && STOP == 0
             end
  
         end
-    else
+    elseif STOP ~= 4
         % First parse found no room for improvement. Need to
         % increase/decrease n.
         fprintf('x step: no room for improvement. Seems like a local optimal. \n');

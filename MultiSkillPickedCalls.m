@@ -1,10 +1,23 @@
-function [f, SL, stdev, forwardGradient, backwardGradient] = MultiSkillPickedCalls(x, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts)
+function [f, SL, stdev, forwardGradient, backwardGradient] = MultiSkillPickedCalls(x, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts)
 % function [fn, FnVar, FnGrad, FnGradCov, constraint, ConstraintCov, ConstraintGrad, ConstraintGradCov] = MultiSkill(x, runlength, seed, other);
 % x is a matrix (nGroups x nShifts) containing the number of agents in
 % group i working shift j
+% beta is the Lagrangian multiplier for the SL constraint
 % runlength is the number of days of simulated time to simulate
 % seed is the index of the substreams to use (integer >= 1)
-% other is not used
+% serviceLevelMin is the minimal overall service level costraint
+% nCallTypes is the number of types of calls or skills
+% nAgentGroups is the number of agent groups or skill-sets
+% arrivalRates is by nCallTypes times (15 minute) periods, in # per HOUR in
+% each period.
+% meanST is nCallTypes by nAgentGroups mean service time, in MINUTES.
+% R is nAgentGroups by nCallTypes, representing types of calls feasible for
+% each agent group. Smaller means more preferred and 1000 means infeasible.
+% Route is nCallTypes by nAgentGroups, representing the most to least
+% preferred agent groups for each call type.
+% Shifts is the schedule of shifts by starting time, time of first break,
+% time of lunch, time of second break, and ending time.
+
 % RETURNS: Mean and confidence interval of the lowest (per period) % of calls
 % answered in less than 20 seconds (should be >0.8) for each call type
 % and total daily cost. To modify this output look at nCall and
@@ -51,7 +64,6 @@ backwardGradient = zeros(nAgentGroups, nShifts);
 % correctly.
 
 SLtime = 20; % service level required time
-meanST = 8; % service time exp with this mean
 patMean = 10; % patience exp with this mean
 nDays = runlength;
 
@@ -166,7 +178,7 @@ else % main simulation
                             for j = 1+sum(nPerGroup(1:nextGroup-1)):sum(nPerGroup(1:nextGroup)) % all agents in nextGroup
                                 if( Agents(j,4) <= time && Agents(j,3) == 1 ) % next available time is now and agent is available
 %                                     pickedCalls(ceil(time), j) = callType; % record call
-                                    sTime = exprnd(meanST); % generate service time
+                                    sTime = exprnd(meanST(callType, nextGroup)); % generate service time
                                     Agents(j,4) = time + sTime; % update availability
                                     Agents(j,3) = 0;
                                     nAvailable(nextGroup) = nAvailable(nextGroup) - 1;
@@ -236,7 +248,7 @@ else % main simulation
                                 %not expired.
                                 %Generate Service Time
                                 RandStream.setGlobalStream(ServiceStream);
-                                sTime = exprnd(meanST);
+                                sTime = exprnd(meanST(callQueue(2,j),Agents(a,1)));
                                 Agents(a,4) = time + sTime;
                                 Agents(a,3) = 0;
                                 Events = [Events [2; Agents(a,4); a; 0]]; % schedule call exit
@@ -313,7 +325,7 @@ else % main simulation
                             %call.
                             %Generating service time of agent
                             RandStream.setGlobalStream(ServiceStream);
-                            sTime = exprnd(meanST);
+                            sTime = exprnd(meanST(callType,Agents(agentNumbers(k),1)));
                             %Count call as successful if answered within
                             %SL time constraint.
                             if( time - callQueue(1,j) <= SLtime/60 ) % time answered within 20s
@@ -417,7 +429,8 @@ else % main simulation
     RandStream.setGlobalStream(OldStream);
     
     % meanSL = mean(Output,3); % mean SL by call type and 15-min period for each day   
-    cost = sum(sum(CostPerDay( x, R, shifts )));
+    % cost = sum(sum(CostPerDay( x, R, shifts )));
+    cost = [1.0, 1.0, 1.1, 1.1, 1.1, 1.2] * x;
     obj = beta * (SLAll - serviceLevelMin) - cost;
     f = mean(obj);
     stdev = std(obj);

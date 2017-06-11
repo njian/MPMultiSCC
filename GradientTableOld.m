@@ -48,7 +48,7 @@ if ~isempty(lateCalls)
                     if ~isnan(lateCalls(5,j))
                         completeTime = lateCalls(1,j) + lateCalls(5,j);
                     else
-                        completeTime = lateCalls(1,j) + exprnd(meanST);
+                        completeTime = lateCalls(1,j) + exprnd(meanST(lateCalls(2,j),i));
                     end
 
                     if completeTime < shifts(q, nextBreak+1)

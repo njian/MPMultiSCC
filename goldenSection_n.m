@@ -4,7 +4,10 @@ golden_ratio = 2/(1 + sqrt(5));
 
 % EXCLUSIVE BOUNDS: evaluating all n from n_L + 1 to n_U - 1.
 n_L = 0; % initial bounds for #agents
-n_U = ceil(max(arrivalRates(:)) * nCallTypes * meanST  / 15); % required by 15-min max workload required
+% nCallTypes, nAgentGroups
+[minArrivalRate, temp] = min(arrivalRates(:));
+[minCallType, ~] = ind2sub(size(arrivalRates), temp);
+n_U = ceil( minArrivalRate * nCallTypes * max(meanST(minCallType, :))  / 15); % required by 15-min max workload required
 if n_U - n_L <= 1
     fprintf('Error: Invalid n_L and n_U bounds. Bounds are exclusive: if want n = 1, one should set n_L = 0, n_U = 3. \n');
 end
@@ -25,7 +28,6 @@ while n_U - n_L > 1
     fprintf('*************************************************************************************************************************** \n');
     fprintf('Golden section iteration (%d) of n: n_L = %d, n_U = %d. \n', count_n, n_L, n_U);
     fprintf('n_sim = %d. \n', n_sim);
-    f_n = 1e4; % best solution so far
     
     aggressiveSearch = 0;
     if n_U - n_L <= 10 % approximately 4 iterations to go
@@ -53,7 +55,7 @@ while n_U - n_L > 1
     % Then evaluate the missing n_rho or n_lambda.
     skip_rest = 0;
     if reuse_lambda == 0 % cannot reuse old lambda for new rho
-        if n_rho ~= round((1 - golden_ratio) * n_L + golden_ratio * n_U) % if not new n_rho = new n_lambda = old n_rho
+        if count_n == 1 || n_rho ~= round((1 - golden_ratio) * n_L + golden_ratio * n_U) % if not new n_rho = new n_lambda = old n_rho
             n_rho = round((1 - golden_ratio) * n_L + golden_ratio * n_U);
             fprintf('*************************************************************************************************************************** \n');
             fprintf('Evaluating: n_rho = %d. \n', n_rho);
@@ -139,16 +141,17 @@ while n_U - n_L > 1
         reuse_lambda = 1; reuse_rho = 0;
     end        
     
+    cost_n = beta * (SL_n - serviceLevelMin) - f_n;
+    history_n = [history_n, [sum(sum(x_n)); n_sim; f_n; sd_n; cost_n; SL_n; beta_n]];
+    
     % Record the best solution so far
-    if f_n > f        
+    if f_n >= f        
         fprintf('n step: improve f from %.2f to %.2f +/- %.2f. SL = %.2f, beta = %.2f. \n', f, f_n, sd_n, SL_n, beta_n);
         f = f_n;
         x_opt = x_n;
         beta = beta_n;
-        cost_n = beta * (SL_n - serviceLevelMin) - f_n;
-        history_n = [history_n, [sum(sum(x_opt)); n_sim; f; sd_n; cost_n; SL_n; beta_n]];
     else
-        fprintf('n step: failed. This solution %.2f <= last best %.2f. \n', f_n, f);
+        fprintf('n step: failed. This solution %.2f < last best %.2f. \n', f_n, f);
     end
     
     if skip_rest == 0

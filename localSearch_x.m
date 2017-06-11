@@ -1,9 +1,9 @@
-function [f_beta, x_ast, SL_beta, sd_beta, n_sim] = localSearch_x(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts)
+function [f_beta, x_ast, SL_beta, sd_beta, n_sim] = localSearch_x(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts)
 % Given n and beta, local search for x.
 nShifts = size(shifts, 1);
 
 % Search Parameters
-nChangeMax = min(32, 2^floor(log2(nAgentGroups*nShifts/10))); % maximum number of swaps in x when generating trial solution
+nChangeMax = 32; % min(32, 2^floor(log2(nAgentGroups*nShifts/10))); % maximum number of swaps in x when generating trial solution
 r = 5; % local random search among this many largest gradient components
 max_fail = 5; % maximum number of consecutive fails in local search for x
 
@@ -20,7 +20,7 @@ for k = 1:n
     col = randi(nShifts);
     x_trial(row, col) = x_trial(row, col) + 1;
 end
-[f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
+[f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts);
 f_beta = f_beta_x;
 SL_beta = SL_beta_x;
 sd_beta = sd_x;
@@ -82,36 +82,38 @@ while count_failed_x < max_fail && STOP == 0
         rF = min(r, npForward);
         rB = min(r, npBackward);
         
-        if rF > 0 && rB > 0
-            % Add agents
-            randIndexF = randi(rF);
-            temp = IndForward(randIndexF);
-            [pRow, pCol] = ind2sub([nAgentGroups, nShifts], temp);
-            x_trial(pRow, pCol) = x_trial(pRow, pCol) + 1;
-            changeTolerancePlus(pRow, pCol) = changeTolerancePlus(pRow, pCol) - 1;
-            if changeTolerancePlus(pRow, pCol) <= 0
-                IndForward(randIndexF) = []; % remove the chosen index
-                npForward = npForward - 1;
-            end
-            
-            % Remove agents
-            randIndexB = randi(rB);
-            temp = IndBackward(randIndexB);
-            [mRow, mCol] = ind2sub([nAgentGroups, nShifts], temp);
-            
-            x_trial(mRow, mCol) = x_trial(mRow, mCol) - 1; 
-            changeToleranceMinus(mRow, mCol) = changeToleranceMinus(mRow, mCol) - 1;
-            if (changeToleranceMinus(mRow, mCol) <= 0 || x_trial(mRow, mCol) <= 0)
-                IndBackward(randIndexB) = [];
-                npBackward = npBackward - 1;
-            end
-            countChange = countChange + 1;
+        % Add agents
+        randIndexF = randi(rF);
+        temp = IndForward(randIndexF);
+        [pRow, pCol] = ind2sub([nAgentGroups, nShifts], temp);
+        x_trial(pRow, pCol) = x_trial(pRow, pCol) + 1;
+        changeTolerancePlus(pRow, pCol) = changeTolerancePlus(pRow, pCol) - 1;
+        if changeTolerancePlus(pRow, pCol) <= 0
+            IndForward(randIndexF) = []; % remove the chosen index
+            npForward = npForward - 1;
         end
-        
+
+        % Remove agents
+        randIndexB = randi(rB);
+        temp = IndBackward(randIndexB);
+        [mRow, mCol] = ind2sub([nAgentGroups, nShifts], temp);
+
+        x_trial(mRow, mCol) = x_trial(mRow, mCol) - 1; 
+        changeToleranceMinus(mRow, mCol) = changeToleranceMinus(mRow, mCol) - 1;
+        if (changeToleranceMinus(mRow, mCol) <= 0 || x_trial(mRow, mCol) <= 0)
+            IndBackward(randIndexB) = [];
+            npBackward = npBackward - 1;
+        end
+        countChange = countChange + 1;        
     end
     
-    if STOP == 0
-        [f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, ceil(runlength), seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
+    if countChange == 0
+       fprintf('x step: no trial solution can be generated. \n'); 
+       STOP = 4;
+    end
+    
+    if STOP == 0 && countChange > 0
+        [f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, ceil(runlength), seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts);
         fprintf('Trial solution obj = %.2f, SL = %.2f. \n', f_beta_x, SL_beta_x);        
         n_sim = n_sim + runlength;
 
@@ -139,7 +141,7 @@ while count_failed_x < max_fail && STOP == 0
             end
 
         end
-    else
+    elseif STOP ~= 4
         % First parse found no room for improvement. Need to
         % increase/decrease n.
         fprintf('x step: no room for improvement. ');
