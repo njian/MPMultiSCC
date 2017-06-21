@@ -1,6 +1,6 @@
 clear;
-path = 'C:\Users\nj227\Dropbox\Research\CallCenter\MPMultiSCC\outputs\special\search_n\oldLocalSearch\largeCallCenter\';
-filename = 'seed5run30';
+path = 'C:\Users\nj227\Dropbox\Research\CallCenter\MPMultiSCC\outputs\special\search_n\combinationSearch\small\';
+filename = '05_24_00_44_51';
 load([path, filename, '.mat']);
 
 [nGroup, nShift] = size(x_opt);
@@ -10,7 +10,7 @@ obj_p = zeros(nGroup, nShift);
 SL_p = zeros(nGroup, nShift);
 potential_add = 0;
 potential_remove = 0;
-runlength = 1;
+runlength = 10;
 
 tic;
 for group = 1:nGroup
@@ -39,8 +39,8 @@ for group = 1:nGroup
 end
 grad_m = obj_m - f_opt;
 grad_p = obj_p - f_opt;
-potential_add
-potential_remove
+fprintf('Number of potential adds: %d. \n', potential_add);
+fprintf('Number of potential removals: %d. \n', potential_remove);
 t = toc
 
 save([path, filename, 'CheckOptimality']);

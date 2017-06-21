@@ -1,4 +1,4 @@
-function [f, SL, stdev, forwardGradient, backwardGradient, avgAbandon, avgServerUtil] = MultiSkillPickedCalls(x, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts)
+function [f, SL, stdev, forwardGradient, backwardGradient, avgAbandon, avgServerUtil] = MultiSkillPickedCallsPots(x, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts)
 % function [fn, FnVar, FnGrad, FnGradCov, constraint, ConstraintCov, ConstraintGrad, ConstraintGradCov] = MultiSkill(x, runlength, seed, other);
 % x is a matrix (nGroups x nShifts) containing the number of agents in
 % group i working shift j
@@ -65,8 +65,8 @@ agentBusyTime = zeros(nAgentGroups, nShifts);
 % independently to ensure that waiting times and breaks are treated
 % correctly.
 
-SLtime = 20/60; % service level required time, in seconds
-patMean = 10; % patience exp with this mean, in minutes
+SLtime = 20/60; % service level required time
+patMean = 10; % patience exp with this mean
 nDays = runlength;
 
 if (sum(sum(x < 0)) > 0|| (sum(size(x) ~= [nAgentGroups, nShifts])>0) || (runlength <= 0) || (seed <= 0) || (round(seed) ~= seed))
@@ -79,7 +79,7 @@ else % main simulation
     % in each group and schedule being hired.
     schedule = x; % nGroups * nShift, number of agents to hire
    
-    maxTime = 540; % 9 hours
+    maxTime = 9600; % 9 hours
 %     pickedCalls = sparse(maxTime, sum(sum(x)));
     
     % GENERATE RANDOM NUMBER STREAMS
@@ -105,21 +105,13 @@ else % main simulation
         
         %Contain the number of calls that arrive/are answered in less than 20 seconds
         % for each period and type.
-        nCalls= zeros(nCallTypes, 36);
-        nLessThan20 = zeros(nCallTypes,36);
+        nCalls= zeros(nCallTypes,1);
+        nLessThan20 = zeros(nCallTypes,1);
         
         %Generate first calls via thinning method for non-homog poisson process
         for j=1:nCallTypes
-            done = 0;
-            lambdaMax = max(arrivalRates(j,:));
-            nextTime = 0;
-            while done == 0
-                nextTime = nextTime + exprnd(lambdaMax);
-                u = rand;
-                if(u <=  arrivalRates(j,min(36,1+floor(nextTime/15)))/lambdaMax) || (nextTime > maxTime)
-                    done = 1;
-                end
-            end
+            lambda = arrivalRates(j);
+            nextTime = exprnd(lambda);
             Events(:,j) = [1; nextTime; j; 0]; % Generate patience times later
         end
         
@@ -153,14 +145,10 @@ else % main simulation
         prevTime = 0;
         while( done == 0 )
             %Check if all events have been dealt with, time >= 540
-            if (prevTime >= 540 && isempty(Events))
+            if (prevTime >= maxTime && isempty(Events))
                 done = 1;
             end
             prevTime = time; % last executed event's time
-            
-            if isempty(time) == 0
-                curShift = 1+floor(time/15);
-            end
             
             %Only accept calls until 540, all other events continue to occur
             %after 540 since calls already in the system must be serviced.
@@ -168,7 +156,7 @@ else % main simulation
                 if ( time <= maxTime )
                     % CALL ARRIVES
                     callType = Events(3,nextEvent);
-                    nCalls(callType, curShift) = nCalls(callType, curShift) + 1; % number of calls by type and shift
+                    nCalls(callType) = nCalls(callType) + 1; % number of calls by type and shift
                     count = 1;
                     nextGroup = Route(callType,count);
                     callTaken = 0;
@@ -195,7 +183,7 @@ else % main simulation
                                     nextGroup = 0;
                                     callTaken = 1;
                                     %Call answered immediately: success
-                                    nLessThan20(callType, curShift) = nLessThan20(callType, curShift) + 1;
+                                    nLessThan20(callType) = nLessThan20(callType) + 1;
 %                                     totalPicked = totalPicked + 1;
                                     break
                                 end
@@ -215,15 +203,9 @@ else % main simulation
                     RandStream.setGlobalStream(ArrivalStream);
                     %Generate next call arrival of this type.
                     success = 0;
-                    lambdaMax = max(arrivalRates(callType,:));
-                    arrTime = time;
-                    while success == 0
-                        arrTime = arrTime + exprnd(lambdaMax);
-                        u = rand;
-                        if( u <=  arrivalRates(callType,min(36,1+floor(arrTime/15)))/lambdaMax )
-                            success = 1;
-                        end
-                    end
+                    lambda = arrivalRates(callType);
+                    arrTime = time + exprnd(lambda);
+                    
                     %Generate Patience time
                     RandStream.setGlobalStream(PatientStream);
                     Events = [Events [1; arrTime; callType; arrTime + exprnd(patMean)]];
@@ -261,7 +243,7 @@ else % main simulation
                                 %Count call as successful if answered withing
                                 %SL time constraint.
                                 if( time - callQueue(1,j) <= SLtime )
-                                    nLessThan20(callQueue(2,j), 1+floor(callQueue(1,j)/15)) = nLessThan20(callQueue(2,j), 1+floor(callQueue(1,j)/15)) + 1;
+                                    nLessThan20(callQueue(2,j)) = nLessThan20(callQueue(2,j)) + 1;
                                 else
                                     % call cannot be answered in time
                                     lateCalls = [lateCalls, [callQueue(:,j); time; sTime]];
@@ -334,7 +316,7 @@ else % main simulation
                             %Count call as successful if answered within
                             %SL time constraint.
                             if( time - callQueue(1,j) <= SLtime ) % time answered within 20s
-                                nLessThan20(callQueue(2,j), 1+floor(callQueue(1,j)/15)) = nLessThan20(callQueue(2,j), 1+floor(callQueue(1,j)/15)) + 1;
+                                nLessThan20(callQueue(2,j)) = nLessThan20(callQueue(2,j)) + 1;
                             else % nLessThan20 by call type, index of 15 minute intervals
                                 lateCalls = [lateCalls, [callQueue(:,j); time; sTime]]; % call is late
                             end
@@ -390,7 +372,7 @@ else % main simulation
                 else
                     %Agent completed shift, unless he works in the last time
                     %period, where he must stay until all calls are completed.
-                    if shifts(Agents(a,2),5) ~= 540 % does not end at end-of-day
+                    if shifts(Agents(a,2),5) ~= maxTime % does not end at end-of-day
                         if(Agents(a,4) < time) % next available time is now
                             nAvailable(Agents(a,1)) = nAvailable(Agents(a,1)) - 1;
                             Agents(a,4) = shifts(Agents(a,2),5);
@@ -414,8 +396,8 @@ else % main simulation
         %Loop through agents to update time at which they left (for those who
         %worked until the end of the day).
         for a=1:length(Agents(:,1))
-            if ( shifts(Agents(a,2),5) == 540 )
-                Agents(a,4) = max(Agents(a,4),540);
+            if ( shifts(Agents(a,2),5) == maxTime )
+                Agents(a,4) = max(Agents(a,4),maxTime);
                 Agents(a,3) = 0;
             end
         end
@@ -424,7 +406,7 @@ else % main simulation
         %Set arrival stream for next day
         RandStream.setGlobalStream(ArrivalStream);
         
-        SLAll(i,1) = sum(sum(nLessThan20)) / sum(sum(nCalls));
+        SLAll(i,1) = sum(nLessThan20) / sum(nCalls);
         % Calculate gradient table
         %[fg, bg] = GradientTablePickedCalls(x, beta, nCallTypes, nCalls, meanST, lateCalls, lastCalls, pickedCalls, R, shifts);
         RandStream.setGlobalStream(ServiceStream)
@@ -437,7 +419,9 @@ else % main simulation
     RandStream.setGlobalStream(OldStream);
     
     % meanSL = mean(Output,3); % mean SL by call type and 15-min period for each day   
-    cost = sum(sum(CostPerDay( x, R, shifts )));
+    % cost = sum(sum(CostPerDay( x, R, shifts )));
+    costByGroup = [1.0, 1.0, 1.1, 1.1, 1.1, 1.2];
+    cost = costByGroup * x;
     obj = beta * (SLAll - serviceLevelMin) - cost;
     f = mean(obj);
     stdev = std(obj);
