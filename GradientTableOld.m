@@ -31,7 +31,7 @@ if ~isempty(lateCalls)
     for i = 1:nGroups
         for q = 1:nShifts
 %             decreaseLessThan20 = zeros(nCallTypes, 36);
-            increaseLessThan20 = zeros(nCallTypes, 36);
+            increaseLessThan20 = 0;
             
             % cost of hire one more agent in group i shift q
             hireCost = hireCostAll(i, q);
@@ -58,11 +58,10 @@ if ~isempty(lateCalls)
                         nextBreak = nextBreak + 1;
                     end
                     % calls picked up in less than 20s is increased
-                    increaseLessThan20(lateCalls(2,j), 1+floor(lateCalls(1,j)/15)) = increaseLessThan20(lateCalls(2,j), 1+floor(lateCalls(1,j)/15)) + 1;
+                    increaseLessThan20 = increaseLessThan20 + 1;
                 end
             end
-            % WIP: make increaseLessThan20 a scalar to save memory
-            changeForwardSL = sum(sum(increaseLessThan20))/totalCalls;
+            changeForwardSL = increaseLessThan20/totalCalls;
             forwardGradient(i, q) = beta * changeForwardSL - hireCost; 
         end
     end
