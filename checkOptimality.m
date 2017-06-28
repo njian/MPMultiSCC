@@ -1,22 +1,39 @@
 % Check optimality
 clear;
-load('C:\Users\nj227\Dropbox\Research\CallCenter\MPMultiSCC\outputs\special\util\large_seed1.mat');
-[nShifts, ~] = size(shifts);
-[f, SL, ~, ~, ~, ~, avgServerUtil0] = MultiSkillPickedCalls(x_opt, beta, 30, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts);
+load('C:\Users\nj227\Dropbox\Research\CallCenter\MPMultiSCC\outputs\special\util\Pots_seed1.mat');
+if isempty(shifts)
+    nShifts = 1;
+else
+    [nShifts, ~] = size(shifts);
+end
+[f, SL, ~, ~, ~, ~, avgServerUtil0] = MultiSkillPickedCallsPots(x_opt, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, SLtime, costByGroup);
 avgServerUtilByGroup0 = nanmean(avgServerUtil0,2);
-improvedComponents = [0, 0 f, SL, avgServerUtilByGroup0(1), avgServerUtilByGroup0(2)];
+improvedComponents_m = [0, 0 f, SL, avgServerUtilByGroup0(1), avgServerUtilByGroup0(2)];
+improvedComponents_p = [0, 0 f, SL, avgServerUtilByGroup0(1), avgServerUtilByGroup0(2)];
 
 for g = 1:nAgentGroups
     for s = 1:nShifts
         if x_opt(g,s) >= 1
-            x = x_opt;
-            x(g,s) = x(g,s) - 1;
-            [f1, SL1, ~, ~, ~, ~, avgServerUtil1] = MultiSkillPickedCalls(x, beta, 30, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts);
-            if SL1 > 0.8
+            x1 = x_opt;
+            x1(g,s) = x1(g,s) - 1;
+            [f1, SL1, ~, ~, ~, ~, avgServerUtil1] = MultiSkillPickedCallsPots(x1, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, SLtime, costByGroup);
+            if SL1 > 0.8 && f1 > f
                 avgServerUtilByGroup1 = nanmean(avgServerUtil1,2);
-                improvedComponents = [improvedComponents; [g, s, f1, SL1, avgServerUtilByGroup1(1), avgServerUtilByGroup1(2)]];
+                improvedComponents_m = [improvedComponents_m; [g, s, f1, SL1, avgServerUtilByGroup1(1), avgServerUtilByGroup1(2)]];
             end
         end 
     end
 end
-save('C:\Users\nj227\Dropbox\Research\CallCenter\MPMultiSCC\outputs\special\util\large_seed1_optimality.mat');
+
+for g = 1:nAgentGroups
+    for s = 1:nShifts
+        x2 = x_opt;
+        x2(g,s) = x2(g,s) + 1;
+        [f2, SL2, ~, ~, ~, ~, avgServerUtil2] = MultiSkillPickedCallsPots(x2, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, SLtime, costByGroup);
+        if SL2 > 0.8 && f2 > f
+            avgServerUtilByGroup2 = nanmean(avgServerUtil2,2);
+            improvedComponents_p = [improvedComponents_p; [g, s, f2, SL2, avgServerUtilByGroup2(1), avgServerUtilByGroup2(2)]];
+        end
+    end
+end
+% save('C:\Users\nj227\Dropbox\Research\CallCenter\MPMultiSCC\outputs\special\util\Pots_seed1_optimality.mat');
