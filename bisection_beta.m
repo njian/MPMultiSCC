@@ -1,4 +1,4 @@
-function [f_n, x_ast_ast, SL_n, sd_n, beta_U, n_sim, fAll_beta] = bisection_beta(n, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, aggressiveSearch)
+function [f_n, x_ast_ast, SL_n, sd_n, beta_n, n_sim, fAll_beta, count_beta] = bisection_beta(n, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, aggressiveSearch, costByGroup)
 %UNTITLED2 Summary of this function goes here
 %   Detailed explanation goes here
 epsilon = 0.1; % stopping precision for beta
@@ -8,7 +8,9 @@ n_sim = 0;
 
 count_beta = 0;
 f_n = 1e4;
+beta_n = beta_U;
 x_ast_ast = NaN;
+x_ast = NaN;
 SL_n = 0;
 sd_n = 0;
 fAll_beta = [];
@@ -40,9 +42,9 @@ while beta_U - beta_L > epsilon
     
     % Local search for x given beta and n
     if aggressiveSearch == 0
-        [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts);
+        [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup, x_ast);
     else % do a more detailed local search when n_U and n_L are close
-        [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x_aggressive(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts);  
+        [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x_aggressive_staffing(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup, x_ast);  
     end
 %       [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_varyN_x(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts); 
     n_sim = n_sim + reps;
@@ -55,6 +57,7 @@ while beta_U - beta_L > epsilon
         % update the best solution for any beta
         x_ast_ast = x_ast;
         f_n = f_beta;
+        beta_n = beta;
         SL_n = SL_beta;
         sd_n = sd_beta;
         fprintf('Number of agents = %d. SL = %.2f. \n', sum(sum(x_ast_ast)), SL_n);
@@ -64,11 +67,11 @@ while beta_U - beta_L > epsilon
     
     % Bisection beta step: find beta s.t. SL = serviceLevelMin
     if count_beta == 1 && SL_beta < serviceLevelMin
-        fprintf('Bisection of beta failed. SL_beta = %.2f, so n is not big enough for beta_U. \n', SL_beta);
+        fprintf('Bisection of beta failed. SL_beta = %.2f when beta is at its largest value. \n', SL_beta);
         break
     end
 
-    if SL_beta < serviceLevelMin
+    if SL_beta <= serviceLevelMin
         beta_L = beta;
     else
         beta_U = beta;
