@@ -1,4 +1,4 @@
-function [f, SL, stdev, forwardGradient, backwardGradient, avgAbandon, avgServerUtil] = MultiSkillPickedCallsPots(x, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, SLtime, costByGroup)
+function [f, SL, stdev, forwardGradient, backwardGradient, avgAbandon, avgServerUtil, lateCalls, lastCalls1, lastCalls2, lastCalls3, totalCalls] = MultiSkillPickedCallsPots(x, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, SLtime, costByGroup)
 % x is a matrix (nGroups x 1) containing the number of agents in group i 
 % beta is the Lagrangian multiplier for the SL constraint
 % runlength is the number of days of simulated time to simulate
@@ -37,8 +37,10 @@ function [f, SL, stdev, forwardGradient, backwardGradient, avgAbandon, avgServer
 lateCalls = [];
 % Calls that are picked up by an agent who is the last available one in the group since then
 % each column: [call arrival time, call type, agent group, agent shift, pick up time]'
-lastCalls = [];
-lastAgent = -1 * ones(nAgentGroups, 1); % the index of the agent in each group * shift
+lastCalls1 = zeros(nAgentGroups, 1); lastCalls2 = zeros(nAgentGroups, 1); lastCalls3 = zeros(nAgentGroups,1);
+lastAgent1 = -1 * ones(nAgentGroups, 1); % the index of the agent in each group * shift
+lastAgent2 = -1 * ones(nAgentGroups, 1); % the index of the agent in each group * shift
+lastAgent3 = -1 * ones(nAgentGroups, 1); % the index of the agent in each group * shift
 % pickedCalls(i,j) = callType if in minute i agent j picked up a call of
 % this callType
 SLAll = zeros(runlength, 1);
@@ -164,11 +166,23 @@ else % main simulation
                                     Agents(j,4) = time + sTime; % update availability
                                     Agents(j,3) = 0;
                                     nAvailable(nextGroup) = nAvailable(nextGroup) - 1;
-                                    if lastAgent(nextGroup, Agents(j,2)) == -1 && nAvailable(nextGroup) == 0 % when no agent is labeled and this is the last
-                                        lastAgent(nextGroup, Agents(j,2)) = j; % label this agent
-                                        lastCalls = [lastCalls, [Events(2:4, nextEvent); time; sTime; nextGroup]]; % record this call
-                                    elseif j == lastAgent(Agents(j,1),Agents(j,2)) % when this is labeled as the last agent
-                                        lastCalls = [lastCalls, [Events(2:4, nextEvent); time; sTime; nextGroup]]; % record this call
+                                    if lastAgent3(nextGroup, Agents(j,2)) == -1 && nAvailable(nextGroup) == 2 % when no agent is labeled and this is the third to last
+                                        lastAgent3(nextGroup, Agents(j,2)) = j; % label this agent
+                                        lastCalls3(nextGroup, Agents(j,2)) = lastCalls3(nextGroup, Agents(j,2)) + 1; % record this call
+                                    elseif j == lastAgent3(Agents(j,1),Agents(j,2)) % when this is labeled as the third to last agent
+                                        lastCalls3 = lastCalls3 + 1; % record this call
+                                    end
+                                    if lastAgent2(nextGroup, Agents(j,2)) == -1 && nAvailable(nextGroup) == 1 % when no agent is labeled and this is the second to last
+                                        lastAgent2(nextGroup, Agents(j,2)) = j; % label this agent
+                                        lastCalls2(nextGroup, Agents(j,2)) = lastCalls2(nextGroup, Agents(j,2)) + 1; % record this call
+                                    elseif j == lastAgent2(Agents(j,1),Agents(j,2)) % when this is labeled as the second to last agent
+                                        lastCalls2(nextGroup, Agents(j,2)) = lastCalls2(nextGroup, Agents(j,2)) + 1; % record this call
+                                    end
+                                    if lastAgent1(nextGroup, Agents(j,2)) == -1 && nAvailable(nextGroup) == 0 % when no agent is labeled and this is the last
+                                        lastAgent1(nextGroup, Agents(j,2)) = j; % label this agent
+                                        lastCalls1(nextGroup, Agents(j,2)) = lastCalls1(nextGroup, Agents(j,2)) + 1; % record this call
+                                    elseif j == lastAgent1(Agents(j,1),Agents(j,2)) % when this is labeled as the last agent
+                                        lastCalls1(nextGroup, Agents(j,2)) = lastCalls1(nextGroup, Agents(j,2)) + 1; % record this call
                                     end
                                     Events = [Events [2; time+sTime; j; 0]]; % schedule call exit
                                     nextGroup = 0;
@@ -276,14 +290,15 @@ else % main simulation
                 time = Events(2,nextEvent);
             end
         end
-           
-        SLAll(i,1) = sum(nLessThan20) / sum(nCalls);
+        
+        totalCalls = sum(sum(nCalls));
+        SLAll(i,1) = sum(nLessThan20) / totalCalls;
         % Calculate gradient table
         RandStream.setGlobalStream(GradientStream)
-        [fg, bg] = GradientTablePots( beta, nAgentGroups, sum(nCalls), meanST, lateCalls, lastCalls, R, costByGroup, [] );
+        [fg, bg] = GradientTablePots( beta, nAgentGroups, totalCalls, meanST, lateCalls, lastCalls1, R, costByGroup );
         forwardGradient = forwardGradient + fg;
         backwardGradient = backwardGradient + bg;
-        avgAbandon = avgAbandon ./ sum(nCalls);
+        avgAbandon = avgAbandon ./ totalCalls;
         
         %Set arrival stream for next day
         RandStream.setGlobalStream(ArrivalStream);

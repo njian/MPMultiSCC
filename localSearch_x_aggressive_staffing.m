@@ -7,9 +7,8 @@ else
 end
  
 % Search Parameters
-d = 1; % max number of change to each coordinate of x
-nChangeMax = 1; %min(32, ceil(nAgentGroups*nShifts*0.5*d)); % maximum number of swaps in x when generating trial solution 2^floor(log2(nAgentGroups*nShifts))
-r = 1; %5; % local random search among this many largest gradient components
+nChangeMax = min(32, ceil(nAgentGroups*nShifts*0.5)); % maximum number of swaps in x when generating trial solution 2^floor(log2(nAgentGroups*nShifts))
+r = 5; % local random search among this many largest gradient components
 max_fail = 5; % maximum number of consecutive fails in local search for x
 nRestarts = 3; % maximum number of restarts of the local search
 
@@ -20,19 +19,14 @@ n_sim = 0;
 triedPairs = [];
  
 % Initialize
-if isnan(x_ast)
+% if isnan(x_ast)
     x_trial = evenly_spread( n, nAgentGroups, nShifts );
-else
-    x_trial = x_ast;
-end
-[f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCallsPots(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, SLtime, costByGroup);
+% else
+%     x_trial = x_ast;
+% end
+[f_beta, SL_beta, sd_beta, forwardGradient0, backwardGradient0, ~, ~, lateCalls0, lastCalls01, lastCalls02, lastCalls03, totalCalls0] = MultiSkillPickedCallsPots(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, SLtime, costByGroup);
 % [f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime);
-f_beta = f_beta_x;
-SL_beta = SL_beta_x;
-sd_beta = sd_x;
-forwardGradient = forwardGradient_x;
-backwardGradient = backwardGradient_x;
-backwardGradient(x_trial==0) = -Inf;
+backwardGradient0(x_trial==0) = -Inf;
  
 % f_beta = f_beta_x;
 x_ast = x_trial;
@@ -47,23 +41,30 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
     fprintf('Local search iteration (%d) of x. \n', count_x);
     fprintf('n = %d, beta = %.2f. \n', sum(sum(x_trial)), beta);
  
+    % restore to last optimal parameters
+    lateCalls = lateCalls0;
+    lastCalls1 = lastCalls01;
+    lastCalls2 = lastCalls02;
+    lastCalls3 = lastCalls03;
+    totalCalls = totalCalls0;
+    forwardGradient = forwardGradient0;
+    backwardGradient = backwardGradient0;
     if count_failed_x == 0
         % Sort the gradients if new gradients are obtained
-        [SortedForward, IndForward] = sort(forwardGradient(:),'descend');
-        [SortedBackward, IndBackward] = sort(backwardGradient(:),'descend');
+        [SortedForward0, IndForward0] = sort(forwardGradient(:),'descend');
+        [SortedBackward0, IndBackward0] = sort(backwardGradient(:),'descend');
     end
-%     SortedForward = SortedForwardSave;
-%     SortedBackward = SortedBackwardSave;
-%     IndForward = IndForwardSave;
-%     IndBackward = IndBackwardSave;
+    SortedForward = SortedForward0;
+    SortedBackward = SortedBackward0;
+    IndForward = IndForward0;
+    IndBackward = IndBackward0;
     % the positive components in forwardGradient and non-negative
     % components in backwardGradient indicate room for improvement
     npForward = sum(SortedForward>=0);
     npBackward = sum(SortedBackward>=0);
-%     npForward0 = npForward;
-%     npBackward0 = npBackward;
-    maxRepetitiveChange = npForward0*npBackward0 + npForward0*(npBackward0==0) + npBackward0*(npForward0==0);
-    nChange = min(nChange0, maxRepetitiveChange*d);
+    
+    maxRepetitiveChange = min(npForward,r)*min(npBackward,r) + min(npForward,r)*(npBackward==0) + min(npBackward,r)*(npForward==0);
+    nChange = min(nChange0, maxRepetitiveChange);
     if isempty(triedPairs)
         triedPairs = zeros(nChange,2);
     end
@@ -79,11 +80,12 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
     rB = min(r, sum(SortedBackward > -SortedForward(1)));
     rF = min(r, sum(SortedForward > -SortedBackward(1)));
     
-    changeTolerancePlus = d * ones(nAgentGroups, nShifts);
-    changeToleranceMinus = d * ones(nAgentGroups, nShifts);
     countChange = 0;
     countRepetitiveChange = 0;
     changedIndex = zeros(nChange,2);
+    d = 3;
+    changeToleranceMinus = d * ones(nAgentGroups, nShifts);
+    lastCalls = lastCalls1;
     while countChange < nChange && rF > 0 && rB > 0 && countRepetitiveChange <= maxRepetitiveChange && STOP == 0 %&& (npForward > 0 || npBackward > 0)
         % Generate random group and shift to add an agent
         randIndexF = randi(rF);
@@ -101,20 +103,24 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
             
             % Execute swap
             x_trial(pRow, pCol) = x_trial(pRow, pCol) + 1;
-            changeTolerancePlus(pRow, pCol) = changeTolerancePlus(pRow, pCol) - 1;
-            if changeTolerancePlus(pRow, pCol) <= 0
-                IndForward(randIndexF) = []; % remove the chosen index
-                SortedForward(randIndexF) = [];
-            end
-            x_trial(mRow, mCol) = x_trial(mRow, mCol) - 1; 
+            x_trial(mRow, mCol) = x_trial(mRow, mCol) - 1;      
             changeToleranceMinus(mRow, mCol) = changeToleranceMinus(mRow, mCol) - 1;
-            if (changeToleranceMinus(mRow, mCol) <= 0 || x_trial(mRow, mCol) <= 0)
-                IndBackward(randIndexB) = [];
-                SortedBackward(randIndexB) = [];
-            end
 
+            % Record swap
             countChange = countChange + 1;
             changedIndex(countChange,:) = [randIndexF, randIndexB];
+            
+            % update gradients
+            updateCoord = [pRow, pCol, mRow, mCol];
+            [ lateCalls ] = update_lateCalls_lastCalls( lateCalls, R, updateCoord );
+            lastCalls(mRow, mCol) = lastCalls2(mRow, mCol) * (changeToleranceMinus(mRow, mCol) == 2) + lastCalls3(mRow, mCol) * (changeToleranceMinus(mRow, mCol) == 1);
+            [forwardGradient, backwardGradient] = GradientTablePots( beta, nAgentGroups, totalCalls, meanST, lateCalls, lastCalls, R, costByGroup );
+            [SortedForward, IndForward] = sort(forwardGradient(:),'descend');   
+            backwardGradient(x_trial==0) = -Inf;
+            if (changeToleranceMinus(mRow, mCol) <= 0 || x_trial(mRow, mCol) <= 0)
+                backwardGradient(mRow, mCol) = -Inf;
+            end
+            [SortedBackward, IndBackward] = sort(backwardGradient(:),'descend');
 
             % update search radius
             if numel(SortedForward) > 0
@@ -153,8 +159,22 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
                 end
                 break; % stop generating trial solution
             else
+                % revert everything
                 countRepetitiveChange = countRepetitiveChange + 1;
                 x_trial = x_ast;
+                SortedForward = SortedForward0;
+                SortedBackward = SortedBackward0;
+                IndForward = IndForward0;
+                IndBackward = IndBackward0;
+                rB = min(r, sum(SortedBackward > -SortedForward(1)));
+                rF = min(r, sum(SortedForward > -SortedBackward(1)));
+                lateCalls = lateCalls0;
+                lastCalls1 = lastCalls01;
+                lastCalls2 = lastCalls02;
+                lastCalls3 = lastCalls03;
+                totalCalls = totalCalls0;
+                forwardGradient = forwardGradient0;
+                backwardGradient = backwardGradient0;
                 countChange = 0; % go back and generate more trial solutions
             end    
         end
@@ -169,13 +189,7 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
         if nRestarts > 0
             fprintf('x step: Seems like a local minimum. nRestarts = %d. Restarting... \n', nRestarts);
             fprintf('--------------------------------------------------------------------- \n');
-            n = sum(sum(x_trial));
-            x_trial = ones(nAgentGroups, nShifts) * floor(n/(nAgentGroups*nShifts));   
-            for k = 1:(n-sum(sum(x_trial)))
-                row = randi(nAgentGroups);
-                col = randi(nShifts);
-                x_trial(row, col) = x_trial(row, col) + 1;
-            end
+            x_trial = evenly_spread( n, nAgentGroups, nShifts );
             STOP = 0;
             count_failed_x = 0;
             nRestarts = nRestarts - 1;
@@ -184,8 +198,14 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
     
     if STOP == 0
         fprintf('Evaluating trial solution.\n');
-        [f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCallsPots(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, SLtime, costByGroup);
-%         [f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, ceil(runlength), seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime);
+        tic;
+        [f_beta_x, SL_beta_x, sd_x, forwardGradient, backwardGradient, ~, ~, lateCalls, lastCalls1, lastCalls2, lastCalls3, totalCalls] = MultiSkillPickedCallsPots(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, SLtime, costByGroup);
+        t = toc;
+        fprintf('time: %d. \n', t);
+        if t > 100
+            t
+        end
+        %         [f_beta_x, SL_beta_x, sd_x, forwardGradient_x, backwardGradient_x] = MultiSkillPickedCalls(x_trial, beta, ceil(runlength), seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime);
         fprintf('Trial solution obj = %.2f, SL = %.2f. \n', f_beta_x, SL_beta_x);  
         n_sim = n_sim + runlength;
  
@@ -198,9 +218,12 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
             f_beta = f_beta_x;
             sd_beta = sd_x;
             SL_beta = SL_beta_x;
-            forwardGradient = forwardGradient_x;
-            backwardGradient = backwardGradient_x;
-            backwardGradient(x_ast==0) = -Inf; % remove impossible reductions in x
+            forwardGradient0 = forwardGradient;
+            backwardGradient0 = backwardGradient;
+            backwardGradient0(x_ast==0) = -Inf; % remove impossible reductions in x
+            lateCalls0 = lateCalls;
+            lastCalls0 = lastCalls;
+            totalCalls0 = totalCalls;
             triedPairs = [];
         else
             x_trial = x_ast;
