@@ -32,23 +32,12 @@ function [f, SL, stdev, forwardGradient, backwardGradient, avgAbandon, avgServer
 %   ***  nj227@cornell.edu Apr ??? 2017 ***
 %   ***************************************
 
-% Calls that are picked up late (>20s) or expired without being picked up
-% each column: [call arrival time, call type, call expiry time, pick up time or Inf, service time or NaN]'
-lateCalls = [];
-% Calls that are picked up by an agent who is the last available one in the group since then
-% each column: [call arrival time, call type, agent group, agent shift, pick up time]'
-lastCalls1 = zeros(nAgentGroups, 1); lastCalls2 = zeros(nAgentGroups, 1); lastCalls3 = zeros(nAgentGroups,1);
-lastAgent1 = -1 * ones(nAgentGroups, 1); % the index of the agent in each group * shift
-lastAgent2 = -1 * ones(nAgentGroups, 1); % the index of the agent in each group * shift
-lastAgent3 = -1 * ones(nAgentGroups, 1); % the index of the agent in each group * shift
-% pickedCalls(i,j) = callType if in minute i agent j picked up a call of
-% this callType
 SLAll = zeros(runlength, 1);
 forwardGradient = zeros(nAgentGroups, 1);
 backwardGradient = zeros(nAgentGroups, 1);
 avgAbandon = zeros(nCallTypes, 1);
 agentBusyTime = zeros(nAgentGroups, 1); 
-
+t = 0;
 %MULTI-SKILL CALL CENTER.
 % Uses discrete event simulation with 4 events:
 % 1. Call Arrives
@@ -72,21 +61,32 @@ else % main simulation
     % the number of agents in each group being hired.
     schedule = x; % nGroups * 1, number of agents to hire
    
-    maxTime = 96; % 160
+    maxTime = 960; % 160
 %     pickedCalls = sparse(maxTime, sum(sum(x)));
     
     % GENERATE RANDOM NUMBER STREAMS
     % Generate new streams for call arrivals, call
-    [ArrivalStream, PatientStream, ServiceStream, GradientStream] = RandStream.create('mrg32k3a', 'NumStreams', 4);
-    % Set the substream to the "seed"
-    ArrivalStream.Substream = seed;
-    PatientStream.Substream = seed;
-    ServiceStream.Substream = seed;
-    GradientStream.Substream = seed;
+%     [ArrivalStream, PatientStream, ServiceStream, GradientStream] = RandStream.create('mrg32k3a', 'NumStreams', 4);
+%     % Set the substream to the "seed"
+%     ArrivalStream.Substream = seed;
+%     PatientStream.Substream = seed;
+%     ServiceStream.Substream = seed;
+%     GradientStream.Substream = seed;
+    rng(seed);
     
-    OldStream = RandStream.setGlobalStream(ArrivalStream); % Temporarily store old stream
+%     OldStream = RandStream.getGlobalStream(); % Temporarily store old stream
     
     for i=1:nDays
+        % Calls that are picked up late (>20s) or expired without being picked up
+        % each column: [call arrival time, call type, call expiry time, pick up time or Inf, service time or NaN]'
+        lateCalls = [];
+        % Calls that are picked up by an agent who is the last available one in the group since then
+        % each column: [call arrival time, call type, agent group, agent shift, pick up time]'
+        lastCalls1 = zeros(nAgentGroups, 1); lastCalls2 = zeros(nAgentGroups, 1); lastCalls3 = zeros(nAgentGroups,1);
+        lastAgent1 = -1 * ones(nAgentGroups, 1); % the index of the agent in each group * shift
+        lastAgent2 = -1 * ones(nAgentGroups, 1); % the index of the agent in each group * shift
+        lastAgent3 = -1 * ones(nAgentGroups, 1); % the index of the agent in each group * shift
+
         %Events will track all future events:
         % call arrivals have (type 1, time,call type and Time+patience time)
         % call exits have (type 2, time, agent#, 0)
@@ -156,7 +156,7 @@ else % main simulation
                     while nextGroup ~= 0 && count <= nAgentGroups % go through each feasible agent group
                         if nAvailable(nextGroup) > 0 % if there's available agent in that group
                             %Set stream for generating service time of agent
-                            RandStream.setGlobalStream(ServiceStream);
+%                             RandStream.setGlobalStream(ServiceStream);
                             %find agent, takes the call
                             for j = 1+sum(nPerGroup(1:nextGroup-1)):sum(nPerGroup(1:nextGroup)) % all agents in nextGroup
                                 if( Agents(j,4) <= time && Agents(j,3) == 1 ) % next available time is now and agent is available
@@ -166,19 +166,19 @@ else % main simulation
                                     Agents(j,4) = time + sTime; % update availability
                                     Agents(j,3) = 0;
                                     nAvailable(nextGroup) = nAvailable(nextGroup) - 1;
-                                    if lastAgent3(nextGroup, Agents(j,2)) == -1 && nAvailable(nextGroup) == 2 % when no agent is labeled and this is the third to last
+                                    if nAvailable(nextGroup) == 2 && lastAgent3(nextGroup, Agents(j,2)) == -1 % when no agent is labeled and this is the third to last
                                         lastAgent3(nextGroup, Agents(j,2)) = j; % label this agent
                                         lastCalls3(nextGroup, Agents(j,2)) = lastCalls3(nextGroup, Agents(j,2)) + 1; % record this call
                                     elseif j == lastAgent3(Agents(j,1),Agents(j,2)) % when this is labeled as the third to last agent
-                                        lastCalls3 = lastCalls3 + 1; % record this call
+                                        lastCalls3(nextGroup, Agents(j,2)) = lastCalls3(nextGroup, Agents(j,2)) + 1; % record this call
                                     end
-                                    if lastAgent2(nextGroup, Agents(j,2)) == -1 && nAvailable(nextGroup) == 1 % when no agent is labeled and this is the second to last
+                                    if nAvailable(nextGroup) == 1 && lastAgent2(nextGroup, Agents(j,2)) == -1 % when no agent is labeled and this is the second to last
                                         lastAgent2(nextGroup, Agents(j,2)) = j; % label this agent
                                         lastCalls2(nextGroup, Agents(j,2)) = lastCalls2(nextGroup, Agents(j,2)) + 1; % record this call
                                     elseif j == lastAgent2(Agents(j,1),Agents(j,2)) % when this is labeled as the second to last agent
                                         lastCalls2(nextGroup, Agents(j,2)) = lastCalls2(nextGroup, Agents(j,2)) + 1; % record this call
                                     end
-                                    if lastAgent1(nextGroup, Agents(j,2)) == -1 && nAvailable(nextGroup) == 0 % when no agent is labeled and this is the last
+                                    if nAvailable(nextGroup) == 0 && lastAgent1(nextGroup, Agents(j,2)) == -1 % when no agent is labeled and this is the last
                                         lastAgent1(nextGroup, Agents(j,2)) = j; % label this agent
                                         lastCalls1(nextGroup, Agents(j,2)) = lastCalls1(nextGroup, Agents(j,2)) + 1; % record this call
                                     elseif j == lastAgent1(Agents(j,1),Agents(j,2)) % when this is labeled as the last agent
@@ -205,14 +205,14 @@ else % main simulation
                         callQueue =[callQueue Events(2:4,nextEvent)];
                     end
                     
-                    RandStream.setGlobalStream(ArrivalStream);
+%                     RandStream.setGlobalStream(ArrivalStream);
                     %Generate next call arrival of this type.
                     success = 0;
                     lambda = arrivalRates(callType);
                     arrTime = time + exprnd(1/lambda);
                     
                     %Generate Patience time
-                    RandStream.setGlobalStream(PatientStream);
+%                     RandStream.setGlobalStream(PatientStream);
                     Events = [Events [1; arrTime; callType; Inf]];
                 end
                 Events(:,nextEvent) = [];
@@ -222,23 +222,23 @@ else % main simulation
                 % CALL IS COMPLETED:
                 % If agent went on break, time of next availability, i.e.
                 % Agents(i,4)  is not equal to current time.
-                
                 a = Events(3,nextEvent); % agent number who handled the call
                 if Agents(a,4) == time % next availability is now
                     %Agent becomes available: Search for a call in queue and,
                     %if none, set Agent as idle.
                     j=2; callTaken = 0;
-                    while j <= length(callQueue(1,:)) && callTaken == 0
-                        if callQueue(3,j) < time % call expiration time
-                            lateCalls = [lateCalls, [callQueue(:,j); Inf; NaN]];
-                            avgAbandon(callQueue(2,j)) = avgAbandon(callQueue(2,j)) + 1;
-                            callQueue(:,j) = []; %Customer expired          
-                        else
+                    nCallQueue = size(callQueue,2);
+                    while j <= nCallQueue && callTaken == 0
+%                         if callQueue(3,j) < time % call expiration time
+%                             lateCalls = [lateCalls, [callQueue(:,j); Inf; NaN]];
+%                             avgAbandon(callQueue(2,j)) = avgAbandon(callQueue(2,j)) + 1;
+%                             callQueue(:,j) = []; %Customer expired          
+%                         else
                             if (R(Agents(a,1),callQueue(2,j)) ~= 1000) % take first feasible call in queue
                                 %Agent can take this call and abandonment time has
                                 %not expired.
                                 %Generate Service Time
-                                RandStream.setGlobalStream(ServiceStream);
+%                                 RandStream.setGlobalStream(ServiceStream);
                                 sTime = exprnd(meanST(callQueue(2,j),Agents(a,1)));
                                 agentBusyTime(Agents(a,1), Agents(a,2)) = agentBusyTime(Agents(a,1), Agents(a,2)) + sTime;
                                 Agents(a,4) = time + sTime;
@@ -255,11 +255,12 @@ else % main simulation
                                 end
                                 
                                 callQueue(:,j) = [];
+                                nCallQueue = nCallQueue - 1;
                                 callTaken = 1;
                             else
                                 j = j+1;
                             end
-                        end
+%                         end
                     end
                     
                     if callTaken == 0
@@ -272,13 +273,13 @@ else % main simulation
                 Events(:,nextEvent) = [];
                 [~, nextEvent] = min(Events(2,:));
                 time = Events(2,nextEvent);
-                
+                             
             elseif(Events(1,nextEvent) == 3)
                 % AGENT STARTS WORKING
                 %To do routing correctly, all agents starting at the same time
                 %must be added to the available agents before assigning calls
                 %to them.
-                % First add all agents starting at the same time.                
+                % First add all agents starting at the same time.     
                 while Events(2,nextEvent) == time && Events(1,nextEvent) == 3 % agent arrival
                     a = Events(3,nextEvent); % agent group number
                     Agents(a,3) = 1; % set availability = 1
@@ -294,28 +295,30 @@ else % main simulation
         totalCalls = sum(sum(nCalls));
         SLAll(i,1) = sum(nLessThan20) / totalCalls;
         % Calculate gradient table
-        RandStream.setGlobalStream(GradientStream)
+%         RandStream.setGlobalStream(GradientStream)
+        tic;
         [fg, bg] = GradientTablePots( beta, nAgentGroups, totalCalls, meanST, lateCalls, lastCalls1, R, costByGroup );
+        t = t + toc;
         forwardGradient = forwardGradient + fg;
         backwardGradient = backwardGradient + bg;
         avgAbandon = avgAbandon ./ totalCalls;
         
         %Set arrival stream for next day
-        RandStream.setGlobalStream(ArrivalStream);
+%         RandStream.setGlobalStream(ArrivalStream);
     end
     %Return old Random Number Stream
-    RandStream.setGlobalStream(OldStream);
+%     RandStream.setGlobalStream(OldStream);  
     
     cost = costByGroup' * x;
     obj = beta * (SLAll - serviceLevelMin) - cost;
     f = mean(obj);
     stdev = std(obj);
     SL = mean(SLAll);
-    %constraint = serviceLevelMin - meanSL; % if this has positive components, soln not feasible
     forwardGradient = forwardGradient / runlength;
     backwardGradient = backwardGradient / runlength;
     
     avgAbandon = avgAbandon / runlength;
     agentBusyTime = agentBusyTime ./ x / runlength;
     avgServerUtil = agentBusyTime ./ maxTime;
+    fprintf('time to evaluate pseudo-gradient: %d.\n', t);
 end

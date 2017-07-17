@@ -1,4 +1,4 @@
-function [ forwardGradient, backwardGradient ] = GradientTableOld( x, beta, nCallTypes, nCalls, meanST, lateCalls, lastCalls, R, shifts )
+function [ forwardGradient, backwardGradient ] = GradientTableOld( x, beta, totalCalls, meanST, lateCalls, lastCalls, R, shifts )
 %----------------********************************--------------------------
 % GradientTable.m
 % Description: Gives the estimated change in the objective value 
@@ -22,10 +22,8 @@ function [ forwardGradient, backwardGradient ] = GradientTableOld( x, beta, nCal
 [nGroups, nShifts] = size(x);
 breakLength = [15, 30, 15, 1000];
 hireCostAll = CostPerDay( ones(nGroups, nShifts), R, shifts );
-totalCalls = sum(sum(nCalls));
 
 forwardGradient = zeros(nGroups, nShifts); % forward gradient, change in obj with one more agent
-backwardGradient = zeros(nGroups, nShifts); % backward gradient, change in obj with one less agent
 % gradient = change in SL * beta - change in cost
 if ~isempty(lateCalls)
     for i = 1:nGroups
@@ -66,19 +64,12 @@ if ~isempty(lateCalls)
         end
     end
 else
-    forwardGradient = -hireCostAll; % no late calls
+    forwardGradient = - hireCostAll; % no late calls
 end
 
 %% Backward gradient
 % unpick the calls by the "last" agent in each group
-for k = 1:size(lastCalls, 2)
-    % WIP: make decreaseLessThan20 a scalar to save memory. Now
-    % callType*Period
-    % decreaseLessThan20(lastCalls(2,k), 1+floor(lastCalls(1,k)/15)) = decreaseLessThan20(lastCalls(2,k), 1+floor(lastCalls(1,k)/15)) - 1;
-    % sum(sum(decreaseLessThan20))/sum(sum(nCalls))
-    backwardGradient(lastCalls(3,k), lastCalls(4,k)) = backwardGradient(lastCalls(3,k), lastCalls(4,k)) - 1/totalCalls; % this group and shift
-end
-backwardGradient = beta * backwardGradient + hireCostAll;
+backwardGradient = - beta * lastCalls / totalCalls + hireCostAll;
 
 end
 
