@@ -18,7 +18,7 @@ for group = 1:nGroup
         x_trial = x_opt;
         if x_trial(group, shift) > 0
             x_trial(group, shift) = x_trial(group, shift) - 1;
-            [obj_m(group, shift), SL_m(group, shift)] = MultiSkillPickedCalls(x_trial, beta, ceil(runlength), seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
+            [obj_m(group, shift), SL_m(group, shift)] = MultiSkillPickedCallsScheduling(x_trial, beta, ceil(runlength), seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
         else
             obj_m(group, shift) = NaN;
             SL_m(group, shift) = NaN;
@@ -30,7 +30,7 @@ for group = 1:nGroup
         
         x_trial = x_opt;
         x_trial(group, shift) = x_trial(group, shift) + 1;
-        [obj_p(group, shift), SL_p(group, shift)] = MultiSkillPickedCalls(x_trial, beta, ceil(runlength), seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
+        [obj_p(group, shift), SL_p(group, shift)] = MultiSkillPickedCallsScheduling(x_trial, beta, ceil(runlength), seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts);
     
         if SL_p(group, shift) >= serviceLevelMin && obj_p(group, shift) > f_opt
             potential_add = potential_add + 1; 

@@ -4,6 +4,8 @@ function [f_n, x_ast_ast, SL_n, sd_n, beta_n, n_sim, fAll_beta, count_beta] = bi
 epsilon = 0.1; % stopping precision for beta
 beta_L = 0; % initial bounds for beta
 beta_U = 1e3;
+% beta_L = 2.47;
+% beta_U = 2.48;
 n_sim = 0;
 
 count_beta = 0;
@@ -14,16 +16,6 @@ x_ast = NaN;
 SL_n = 0;
 sd_n = 0;
 fAll_beta = [];
-
-% nShifts = size(shifts, 1);
-% x_trial = zeros(nAgentGroups, nShifts);      
-% for k = 1:n
-%     row = randi(nAgentGroups);
-%     col = randi(nShifts);
-%     x_trial(row, col) = x_trial(row, col) + 1;
-% end
-% x_ast = x_trial;
-% x_ast_ast = x_trial;
 
 while beta_U - beta_L > epsilon
     count_beta = count_beta + 1;
@@ -42,11 +34,10 @@ while beta_U - beta_L > epsilon
     
     % Local search for x given beta and n
     if aggressiveSearch == 0
-        [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup, x_ast);
+        [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup);
     else % do a more detailed local search when n_U and n_L are close
-        [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x_aggressive_staffing(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup, x_ast);  
-    end
-%       [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_varyN_x(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, R, Route, shifts); 
+%         [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x_aggressive_staffing(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup);  
+        [f_beta, x_ast, SL_beta, sd_beta, reps] = localSearch_x_aggressive_scheduling(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup);  
     n_sim = n_sim + reps;
     
     cost_beta = beta * (SL_beta - serviceLevelMin) - f_beta;

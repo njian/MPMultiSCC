@@ -1,52 +1,39 @@
 function [ x_opt, beta, history_n, history_all, n_sim, n_beta] = goldenSection_n( runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup)
 % Use golden section to find n with minimal f_n = max_n f_n_beta.
 golden_ratio = 2/(1 + sqrt(5));
+[nShifts, ~] = size(shifts);
 
 % EXCLUSIVE BOUNDS: evaluating all n from n_L + 1 to n_U - 1.
 if isempty(shifts)
     shiftsCoverage = 1;
+    nShifts = 1;
 else
-    shiftsCoverage = ceil( max(shifts(:,5))/min(shifts(:,6)) );
+    shiftsCoverage = max(shifts(:,5))/min(shifts(:,6));
 end
-
-% LB: treating as single-skill and use fastest agent group
-n_L = solve_ErlangC( max(sum(arrivalRates,1))/size(arrivalRates,2), min(meanST(:)), SLtime ); %mean(arrivalRates(i,:)) * min(meanST(i,:));
+% LB: treating as single type and use fastest agent group
+n_L = solve_ErlangC( mean(sum(arrivalRates,1)), min(meanST(:)), SLtime ); 
 n_U = 0;
 for i = 1:nCallTypes  
    % UB: each callType separate call center, using slowest agent group in
    % each
-   c2 = solve_ErlangC( max(arrivalRates(i,:)), max(meanST(i,:)), SLtime );
+   c2 = solve_ErlangC( mean(arrivalRates(i,:)), max(meanST(i,:)), SLtime );
    n_U = n_U + c2; 
 end
-n_L = floor(n_L*shiftsCoverage); 
-n_U = ceil(n_U*shiftsCoverage);
+n_L = n_L*floor(shiftsCoverage); 
+n_U = n_U*ceil(shiftsCoverage);
+
 % Test if the bounds are appropriate
-[nShifts, ~] = size(shifts);
 % stepSize = max(nAgentGroups * nShifts * 0.1, 5);
 % x_trial = evenly_spread( n_U, nAgentGroups, nShifts );
-% [~, ~, ~, forwardGradient, ~] = MultiSkillPickedCallsPots(x_trial, 1e3, 1, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime);
-% while sum(sum(forwardGradient>0)) > 0.8 * nAgentGroups * nShifts
-%     n_U = n_U + stepSize;
-%     x_trial = evenly_spread( n_U, nAgentGroups, nShifts );
-%     [~, ~, ~, forwardGradient, ~] = MultiSkillPickedCallsPots(x_trial, 1e3, 1, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime);
-% end
-% x_trial = evenly_spread( n_L, nAgentGroups, nShifts );
-% [~, ~, ~, ~, backwardGradient] = MultiSkillPickedCallsPots(x_trial, 1e3, 1, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime);
-% while n_L >= stepSize && sum(sum(backwardGradient>0)) > 0.8 * nAgentGroups * nShifts
-%     n_L = n_L - stepSize;
-%     x_trial = evenly_spread( n_L, nAgentGroups, nShifts );
-%     [~, ~, ~, ~, backwardGradient] = MultiSkillPickedCallsPots(x_trial, 1e3, 1, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime);
-% end
-
-% [~, ~, SL] = localSearch_x_aggressive(n_U, 1e3, 1, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup);
+% [~, ~, SL] = localSearch_x_aggressiveOld(n_U-1, 1e3, 1, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime);
 % while SL < 0.8
 %     n_U = n_U + stepSize;
-%     [~, ~, SL] = localSearch_x_aggressive(n_U, 1e3, 1, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup);
+%     [~, ~, SL] = localSearch_x_aggressiveOld(n_U-1, 1e3, 1, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime);
 % end
-% [~, ~, SL] = localSearch_x_aggressive(n_L, 1, 1, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup);
+% [~, ~, SL] = localSearch_x_aggressiveOld(n_L+1, 1, 1, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime);
 % while SL > 0.8 && n_L > stepSize
 %     n_L = n_L - stepSize;
-%     [~, ~, SL] = localSearch_x_aggressive(n_L, 1, 1, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup);
+%     [~, ~, SL] = localSearch_x_aggressiveOld(n_L+1, 1, 1, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime);
 % end
 
 if n_U - n_L <= 1
@@ -56,6 +43,7 @@ end
 history_n = [];
 history_all = [];
 f = -1e4; % best solution so far
+SL = NaN;
 count_n = 0;
 n_sim = 0;
 n_beta = 0;
@@ -72,9 +60,6 @@ while n_U - n_L > 1
     fprintf('n_sim = %d. \n', n_sim);
     
     aggressiveSearch = 1;
-%     if n_U - n_L <= 10 % approximately 4 iterations to go
-%         aggressiveSearch = 1;
-%     end  
     fprintf('Using aggressiveSearch? %d \n', aggressiveSearch);
     
     % First try to reuse n_rho or n_lambda points utilizing golden ratio.
@@ -189,13 +174,14 @@ while n_U - n_L > 1
     history_n = [history_n, [sum(sum(x_n)); n_sim; f_n; sd_n; cost_n; SL_n; beta_n]];
     
     % Record the best solution so far
-    if f_n >= f        
+    if f_n >= f
         fprintf('n step: improve f from %.2f to %.2f +/- %.2f. SL = %.2f, beta = %.2f. \n', f, f_n, sd_n, SL_n, beta_n);
         f = f_n;
         x_opt = x_n;
         beta = beta_n;
+        SL = SL_n;
     else
-        fprintf('n step: failed. This solution %.2f < last best %.2f. \n', f_n, f);
+        fprintf('n step: failed. This solution %.2f has SL %.2f. Last best %.2f has SL %.2f. \n', f_n, SL_n, f, SL);
     end
     
     if skip_rest == 0

@@ -1,5 +1,5 @@
-function [f_beta, x_ast, SL_beta, sd_beta, n_sim] = localSearch_x_aggressive_staffing(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup)
-% Given n and beta, local search for x.
+function [f_beta, x_ast, SL_beta, sd_beta, n_sim] = localSearch_x_aggressive_scheduling(n, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup)
+% Given n and beta, local search for x. 
 if ~isempty(shifts)
     nShifts = size(shifts, 1);
 else
@@ -16,13 +16,18 @@ count_x = 0;
 nChange0 = nChangeMax;
 count_failed_x = 0;
 n_sim = 0;
+% tried_f = [];
 triedPairs = [];
  
 % Initialize
 x_trial = evenly_spread( n, nAgentGroups, nShifts );
-[f_beta, SL_beta, sd_beta, forwardGradient0, backwardGradient0, ~, ~, lateCalls0, lastCalls01, lastCalls02, lastCalls03, totalCalls0] = MultiSkillPickedCallsStaffing(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, SLtime, shifts, costByGroup);
+[f_beta, SL_beta, sd_beta, forwardGradient0, backwardGradient0] = MultiSkillPickedCallsScheduling(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup);
 backwardGradient0(x_trial==0) = -Inf;
+ 
+% f_beta = f_beta_x;
 x_ast = x_trial;
+% SL_beta = SL_beta_x;
+% sd_beta = sd_beta_x;
 STOP = 0;
 % stop when either consecutive fails exceed tolerance, or there's
 % no room for improvement
@@ -31,13 +36,8 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
     fprintf('--------------------------------------------------------------------- \n');
     fprintf('Local search iteration (%d) of x. \n', count_x);
     fprintf('n = %d, beta = %.2f. \n', sum(sum(x_trial)), beta);
- 
+    
     % restore to last optimal parameters
-    lateCalls = lateCalls0;
-    lastCalls1 = lastCalls01;
-    lastCalls2 = lastCalls02;
-    lastCalls3 = lastCalls03;
-    totalCalls = totalCalls0;
     forwardGradient = forwardGradient0;
     backwardGradient = backwardGradient0;
     if count_failed_x == 0
@@ -53,7 +53,7 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
     % components in backwardGradient indicate room for improvement
     npForward = sum(SortedForward>=0);
     npBackward = sum(SortedBackward>=0);
-    
+
     maxRepetitiveChange = min(npForward,r)*min(npBackward,r) + min(npForward,r)*(npBackward==0) + min(npBackward,r)*(npForward==0);
     nChange = min(nChange0, maxRepetitiveChange);
     if isempty(triedPairs)
@@ -64,19 +64,20 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
     end
     fprintf('Number of positive forward and backward gradients: %d and %d \n', npForward, npBackward);
     fprintf('nChange = %d. \n', nChange);
-    
+   
     % search radius <= number of positive backward/forward gradient
     % components so that there exists a forward/backward gradient component
     % to make the sum > 0.
     rB = min(r, sum(SortedBackward > -SortedForward(1)));
     rF = min(r, sum(SortedForward > -SortedBackward(1)));
     
+    d = 3; % max number of change to each coordinate of x
+    changeTolerancePlus = d * ones(nAgentGroups, nShifts);
+    changeToleranceMinus = d * ones(nAgentGroups, nShifts);
+    
     countChange = 0;
     countRepetitiveChange = 0;
-    changedIndex = zeros(nChange,2);
-    d = 3;
-    changeToleranceMinus = d * ones(nAgentGroups, nShifts);
-    lastCalls = lastCalls1;
+    changedIndex = zeros(nChange,2);   
     while countChange < nChange && rF > 0 && rB > 0 && countRepetitiveChange <= maxRepetitiveChange && STOP == 0 %&& (npForward > 0 || npBackward > 0)
         % Generate random group and shift to add an agent
         randIndexF = randi(rF);
@@ -91,27 +92,24 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
             indB = IndBackward(randIndexB);
             mCol = ceil(indB/nAgentGroups);
             mRow = indB - (mCol-1)*nAgentGroups;            
-            
+
             % Execute swap
             x_trial(pRow, pCol) = x_trial(pRow, pCol) + 1;
-            x_trial(mRow, mCol) = x_trial(mRow, mCol) - 1;      
+            changeTolerancePlus(pRow, pCol) = changeTolerancePlus(pRow, pCol) - 1;
+            if changeTolerancePlus(pRow, pCol) <= 0
+                IndForward(randIndexF) = []; % remove the chosen index
+                SortedForward(randIndexF) = [];
+            end
+            x_trial(mRow, mCol) = x_trial(mRow, mCol) - 1; 
             changeToleranceMinus(mRow, mCol) = changeToleranceMinus(mRow, mCol) - 1;
-
+            if (changeToleranceMinus(mRow, mCol) <= 0 || x_trial(mRow, mCol) <= 0)
+                IndBackward(randIndexB) = [];
+                SortedBackward(randIndexB) = [];
+            end
+            
             % Record swap
             countChange = countChange + 1;
             changedIndex(countChange,:) = [randIndexF, randIndexB];
-            
-            % update gradients
-            updateCoord = [pRow, pCol, mRow, mCol];
-            [ lateCalls ] = update_lateCalls_lastCalls( lateCalls, R, updateCoord );
-            lastCalls(mRow, mCol) = lastCalls2(mRow, mCol) * (changeToleranceMinus(mRow, mCol) == 2) + lastCalls3(mRow, mCol) * (changeToleranceMinus(mRow, mCol) == 1);
-            [forwardGradient, backwardGradient] = GradientTableStaffing( beta, nAgentGroups, totalCalls, meanST, lateCalls, lastCalls, R, costByGroup );
-            [SortedForward, IndForward] = sort(forwardGradient(:),'descend');   
-            backwardGradient(x_trial==0) = -Inf;
-            if (changeToleranceMinus(mRow, mCol) <= 0 || x_trial(mRow, mCol) <= 0)
-                backwardGradient(mRow, mCol) = -Inf;
-            end
-            [SortedBackward, IndBackward] = sort(backwardGradient(:),'descend');
 
             % update search radius
             if numel(SortedForward) > 0
@@ -143,11 +141,7 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
 
             if tried == 0 
                 % record pair
-                try
-                    triedPairs(:,:,count_failed_x+1) = changedIndex;
-                catch
-                    triedPairs
-                end
+                triedPairs(:,:,count_failed_x+1) = changedIndex;
                 break; % stop generating trial solution
             else
                 % revert everything
@@ -159,11 +153,6 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
                 IndBackward = IndBackward0;
                 rB = min(r, sum(SortedBackward > -SortedForward(1)));
                 rF = min(r, sum(SortedForward > -SortedBackward(1)));
-                lateCalls = lateCalls0;
-                lastCalls1 = lastCalls01;
-                lastCalls2 = lastCalls02;
-                lastCalls3 = lastCalls03;
-                totalCalls = totalCalls0;
                 forwardGradient = forwardGradient0;
                 backwardGradient = backwardGradient0;
                 countChange = 0; % go back and generate more trial solutions
@@ -171,8 +160,8 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
         end
     end
 
-    if countChange == 0  % local optimum by gradient, or by exhausting all tries
-       fprintf('x step: no trial solution can be generated: rB = %d, rF = %d. \n', rB, rF); 
+    if countChange == 0
+       fprintf('x step: no trial solution can be generated. \n'); 
        STOP = 4;
     end
      
@@ -187,16 +176,13 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
         end
     end
     
-    if STOP == 0
+    if STOP == 0 && countChange > 0
         fprintf('Evaluating trial solution.\n');
-        t1 = tic;
-        x_trial
-        [f_beta_x, SL_beta_x, sd_x, forwardGradient, backwardGradient, ~, ~, lateCalls, lastCalls1, lastCalls2, lastCalls3, totalCalls] = MultiSkillPickedCallsStaffing(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, SLtime, shifts, costByGroup);
-        t = toc(t1);
-        fprintf('time in MultiSkill: %d. \n', t);
-        fprintf('length of lateCalls: %d. \n', size(lateCalls,2));
-        if t > 500
-            beep;
+        t00 = tic;
+        [f_beta_x, SL_beta_x, sd_x, forwardGradient, backwardGradient] = MultiSkillPickedCallsScheduling(x_trial, beta, runlength, seed, serviceLevelMin, nCallTypes, nAgentGroups, arrivalRates, meanST, R, Route, shifts, SLtime, costByGroup);
+        t = toc(t00);
+        fprintf('time: %d. \n', t);
+        if t > 100
             t
         end
         fprintf('Trial solution obj = %.2f, SL = %.2f. \n', f_beta_x, SL_beta_x);  
@@ -214,9 +200,6 @@ while count_failed_x < max_fail && nChange0 > 0 && STOP == 0
             forwardGradient0 = forwardGradient;
             backwardGradient0 = backwardGradient;
             backwardGradient0(x_ast==0) = -Inf; % remove impossible reductions in x
-            lateCalls0 = lateCalls;
-            lastCalls0 = lastCalls;
-            totalCalls0 = totalCalls;
             triedPairs = [];
         else
             x_trial = x_ast;
